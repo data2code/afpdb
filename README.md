@@ -88,7 +88,7 @@ p.save("binders.pdb")
 # display the PDB struture, default is show ribbon and color by chains.
 p.show(show_sidechains=True)
 ```
-Output (It will be 3D interactive within Jupyter Notebook)
+Output (It will be 3D interactive within Jupyter Notebook)<br>
 <img src="tutorial/img/demo.png">
 
 ## Tutorial
