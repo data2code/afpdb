@@ -1253,8 +1253,8 @@ class Protein:
     def rs_not(self, rs, rs_full=None):
         return RS(self, rs)._not(rs_full=rs_full)
 
-    def rs_notin(self, rs):
-        return RS(self, rs)-RS(self, rs)
+    def rs_notin(self, rs_a, rs_b):
+        return RS(self, rs_a)-RS(self, rs_b)
 
     def rs_and(self, *L_rs):
         L_rs=[RS(self, x) for x in L_rs]
