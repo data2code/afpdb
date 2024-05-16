@@ -536,10 +536,10 @@ class Protein:
                 v=v[cnt>1]
                 raise Exception(f"There are duplicate residues: {v}")
             # make sure chains are not fragmented
-            chains=t.chain.values
-            chains=np.array([ x for i,x in enumerate(t.chains) if i==0 or x!=chains[i-1] ])
-            if len(t.chain.unique())!=len(chains):
-                v,cnt=np.unique(chains, return_counts=True)
+            chain=t.chain.values
+            chain=np.array([ x for i,x in enumerate(t.chain) if i==0 or x!=chain[i-1] ])
+            if len(t.chain.unique())!=len(chain):
+                v,cnt=np.unique(chain, return_counts=True)
                 v=v[cnt>1]
                 raise Exception(f"Residues for chain {v} are not grouped together.")
             # make sure residues within a chain are sorted
