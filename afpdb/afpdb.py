@@ -1088,6 +1088,20 @@ class Protein:
             S.append(afres.restypes_with_x[aa])
         return "".join(S)
 
+    def summary(self):
+        """Summarize key structure information"""
+        c_seq=self.seq_dict()
+        chains=list(c_seq.keys())
+        t=pd.DataFrame({"Chain":chains})
+        t['Sequence']=t.Chain.map(c_seq)
+        c_len=self.len_dict()
+        t['Length']=t.Chain.map(c_len)
+        t['#Missing Residues']=t.Sequence.apply(lambda s: len(s)-len(s.replace("X", "")))
+        c_pos=self.chain_pos()
+        t['First Residue Name']=t.Chain.apply(lambda k: self.data.residue_index[c_pos[k][0]])
+        t['Last Residue Name']=t.Chain.apply(lambda k: self.data.residue_index[c_pos[k][1]])
+        return t
+
     @staticmethod
     def copy_side_chain(to_pdb, src_pdb, chain_map=None, c_seq=None):
         """
