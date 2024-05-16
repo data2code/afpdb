@@ -514,11 +514,11 @@ class Protein:
         obj._renumber(renumber)
         return obj
 
-    def extract_by_contig(self, rs, ats=None, inplace=False):
+    def extract_by_contig(self, rs, ats=None, as_rl=False, inplace=False):
         util.warn_msg('extract_by_contig will be depreciated, please use extract() instead.')
-        return self.extract(rs, ats=ats, inplace=inplace)
+        return self.extract(rs, ats=ats, as_rl=as_rl, inplace=inplace)
 
-    def extract(self, rs, ats=None, inplace=False):
+    def extract(self, rs, ats=None, as_rl=False, inplace=False):
         #for i in idx: print(chain_name[self.data.chain_index[i]]+resi[i])
         """create a new object based on residues specified by the contig string
         contig string: "A" for the whole chain, ":" separate chains, range "A2-5,10-13" (residue by residue index)
@@ -527,7 +527,31 @@ class Protein:
 
             Example: p=p.extract("P-3:H3-8,10-12")
         """
-        rs=RS(self, rs)
+        def validate_rl(rl):
+            # make sure no duplicates
+            t=pd.DataFrame({"resi":rl.data})
+            t['chain']=rl.chain()
+            if len(t.resi.unique())!=len(t):
+                v,cnt=np.unique(t.resi.values, return_counts=True)
+                v=v[cnt>1]
+                raise Exception(f"There are duplicate residues: {v}")
+            # make sure chains are not fragmented
+            chains=t.chain.values
+            chains=np.array([ x for i,x in enumerate(t.chains) if i==0 or x!=chains[i-1] ])
+            if len(t.chain.unique())!=len(chains):
+                v,cnt=np.unique(chains, return_counts=True)
+                v=v[cnt>1]
+                raise Exception(f"Residues for chain {v} are not grouped together.")
+            # make sure residues within a chain are sorted
+            for k,t_v in t.groupby('chain'):
+                if not np.array_equal(t_v.resi.values, np.unique(t_v.resi.values)):
+                    raise Exception(f"Residues within chain {k} are not sorted in order.")
+
+        if as_rl:
+            rs=RL(self, rs)
+            validate_rl(rs)
+        else:
+            rs=RS(self, rs)
         ats=ATS(ats)
         if len(rs)==0:
             raise Exception("No residue is selected!")
@@ -1145,14 +1169,14 @@ class Protein:
         # acceleration
         def get_xyz(rs, ats):
             """Extract atom XYZ coordinate, the corresponding residue id will also be returned"""
-            xyz=self.data.atom_positions[rs]
+            xyz=self.data.atom_positions[rs.data]
             n=xyz.shape[1]
-            mask=self.data.atom_mask[rs]
+            mask=self.data.atom_mask[rs.data]
             if ats.not_full():
-                xyz=xyz[:, ats]
-                mask=mask[:, ats]
+                xyz=xyz[:, ats.data]
+                mask=mask[:, ats.data]
             n=xyz.shape[1]
-            res=np.repeat(rs, n).reshape(-1, n)
+            res=np.repeat(rs.data, n).reshape(-1, n)
             xyz=xyz.reshape(-1, 3)
             mask=mask.reshape(-1)>0
             res=res.reshape(-1)
@@ -1161,8 +1185,8 @@ class Protein:
             return (res, xyz)
 
         # only consider the residues within the box [-dist+xyz_min, xyz_max+dist], important for large structures
-        idx_rs, xyz_rs=get_xyz(rs.data, ats)
-        idx_b, xyz_b=get_xyz(rs_b.data, ats)
+        idx_rs, xyz_rs=get_xyz(rs, ats)
+        idx_b, xyz_b=get_xyz(rs_b, ats)
         xyz_min=np.min(xyz_rs, axis=0).reshape(-1,3)-dist
         xyz_max=np.max(xyz_rs, axis=0).reshape(-1,3)+dist
         mask = np.min((xyz_b>=xyz_min) & (xyz_b<=xyz_max), axis=1)
@@ -1228,6 +1252,9 @@ class Protein:
 
     def rs_not(self, rs, rs_full=None):
         return RS(self, rs)._not(rs_full=rs_full)
+
+    def rs_notin(self, rs):
+        return RS(self, rs)-RS(self, rs)
 
     def rs_and(self, *L_rs):
         L_rs=[RS(self, x) for x in L_rs]
@@ -1755,10 +1782,14 @@ class RL:
     def __contains__(self, item):
         return item in self.data
 
-    def name(self):
+    def unique_name(self):
         """convert residue index into name {chain}{res_index}"""
         chains=self.p.chain_id()
         return [f"{chains[self.p.data.chain_index[x]]}{self.p.data.residue_index[x]}" for x in self.data]
+
+    def name(self):
+        """convert residue index into name {res_index}"""
+        return [f"{self.p.data.residue_index[x]}" for x in self.data]
 
     def namei(self):
         """Return the integer part of the residue_index, type is int"""
