@@ -89,7 +89,7 @@ p.save("binders.pdb")
 p.show(show_sidechains=True)
 ```
 Output (It will be 3D interactive within Jupyter Notebook)
-<img src="img/demo.png">
+<img src="tutorial/img/demo.png">
 
 ## Tutorial
 
