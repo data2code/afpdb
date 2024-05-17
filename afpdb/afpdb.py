@@ -1097,6 +1097,7 @@ class Protein:
         c_len=self.len_dict()
         t['Length']=t.Chain.map(c_len)
         t['#Missing Residues']=t.Sequence.apply(lambda s: len(s)-len(s.replace("X", "")))
+        t['#Insertion Code']=t.Chain.apply(lambda k: sum([re.search(r'[A-Za-z]$', s) is not None for s in self.rs(k).name()]))
         c_pos=self.chain_pos()
         t['First Residue Name']=t.Chain.apply(lambda k: self.data.residue_index[c_pos[k][0]])
         t['Last Residue Name']=t.Chain.apply(lambda k: self.data.residue_index[c_pos[k][1]])
