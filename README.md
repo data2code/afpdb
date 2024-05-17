@@ -13,11 +13,11 @@ p.summary().display()
 ```
 Output
 ```
-    Chain    Sequence                                                                                                                                                                                                                                            Length    #Missing Residues    First Residue Name    Last Residue Name
---  -------  --------------------------------------------------------------------------------------------------
- 0  H        VQLVQSGAEVKRPGSSVTVS...        220                   20                     2                  227
- 1  L        EIVLTQSPGTQSLSPGERAT...        212                    0                     1                  211
- 2  P        NWFDITNWLWYIK                   13                    0                   671                  683
+    Chain    Sequence                    Length    #Missing Residues    #Insertion Code    First Residue Name    Last Residue Name
+--  -------  ---------------------------------------------------------------------------------------------------------------------
+ 0  H        VQLVQSGAEVKRPGSSVTVS...        220                   20                 14                     2                  227
+ 1  L        EIVLTQSPGTQSLSPGERAT...        212                    0                  1                     1                  211
+ 2  P        NWFDITNWLWYIK                   13                    0                  0                   671                  683
 ```
 ### Residue Relabeling
 
@@ -38,11 +38,11 @@ p.summary()
 Output
 
 ```
-    Chain    Sequence                                                                                                                                                                                                                                            Length    #Missing Residues    First Residue Name    Last Residue Name
---  -------  --------------------------------------------------------------------------------------------------
- 0  H        VQLVQSGAEVKRPGSSVTVS...        220                   20                     1                  226
- 1  L        EIVLTQSPGTQSLSPGERAT...        212                    0                     1                  211
- 2  P        NWFDITNWLWYIK                   13                    0                     1                   13
+    Chain    Sequence                    Length    #Missing Residues    #Insertion Code    First Residue Name    Last Residue Name
+--  -------  ---------------------------------------------------------------------------------------------------------------------
+ 0  H        VQLVQSGAEVKRPGSSVTVS...        220                   20                 14                     1                  226
+ 1  L        EIVLTQSPGTQSLSPGERAT...        212                    0                  1                     1                  211
+ 2  P        NWFDITNWLWYIK                   13                    0                  0                     1                   13
  ```
 ### Replace Missing Residues for AI Prediction
 ```
@@ -88,7 +88,7 @@ p.save("binders.pdb")
 # display the PDB struture, default is show ribbon and color by chains.
 p.show(show_sidechains=True)
 ```
-Output (It will be 3D interactive within Jupyter Notebook)
+Output (It will be 3D interactive within Jupyter Notebook)<br>
 <img src="tutorial/img/demo.png">
 
 ## Tutorial
