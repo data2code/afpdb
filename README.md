@@ -7,12 +7,12 @@ git clone https://github.com/data2code/afpdb.git
 cd afpdb
 pip install .
 ```
-## Demo
-
 To import the package use:
 ```
 from afpdb.afpdb import Protein,RS,RL,ATS
 ```
+## Demo
+
 ### Structure Read & Summary
 ```
 # load the ab-ag complex structure 5CIL from PDB
