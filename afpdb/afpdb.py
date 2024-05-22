@@ -518,7 +518,7 @@ class Protein:
         util.warn_msg('extract_by_contig will be depreciated, please use extract() instead.')
         return self.extract(rs, ats=ats, as_rl=as_rl, inplace=inplace)
 
-    def extract(self, rs, ats=None, as_rl=False, inplace=False):
+    def extract(self, rs, ats=None, as_rl=True, inplace=False):
         #for i in idx: print(chain_name[self.data.chain_index[i]]+resi[i])
         """create a new object based on residues specified by the contig string
         contig string: "A" for the whole chain, ":" separate chains, range "A2-5,10-13" (residue by residue index)
