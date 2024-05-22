@@ -1438,9 +1438,10 @@ class Protein:
         #df.display()
         return df
 
-    def rmsd(self, obj_b, rl_a=None, rl_b=None, ats=None):
+    def rmsd(self, obj_b, rl_a=None, rl_b=None, ats=None, align=False):
         """ls_a and ls_b can take RS objects,
             however, RS or set should not be used, if the one-to-one mapping orders between rl_a and rl_b should be preserved.
+            if align is True, we align this object towards obj_b first, so self will be modified
         """
         rl_a=RL(self, rl_a)
         rl_b=RL(obj_b, rl_b)
@@ -1448,6 +1449,10 @@ class Protein:
         ats=ATS(ats)
         if ats.is_empty():
             util.error_msg("ats cannot be empty in _point_dist()!")
+
+        if align:
+            self.align(obj_b=obj_b, rl_a=rl_a, rl_b=rl_b, ats=ats)
+
         #print(self.data.atom_positions.shape, rl_a, rl_b)
         a_res = self.data.atom_positions[rl_a.data]
         a_mask = self.data.atom_mask[rl_a.data].copy()
@@ -1612,13 +1617,10 @@ class Protein:
         t=pd.DataFrame(out, columns=['chain','resn','resn_i','resi','aa']+bonds+angles)
         return t
 
-def classname(obj):
-    cls = type(obj)
-    module = cls.__module__
-    name = cls.__qualname__
-    if module is not None and module != "__builtin__":
-        name = module + "." + name
-    return name
+    @staticmethod
+    def PyMOL():
+        from .mypymol import PyMOL
+        return PyMOL()
 
 class ATS:
 
@@ -1902,9 +1904,9 @@ class RS(RL):
     def str(self, format="CONTIG", rs_name="rs"):
         return self.__str__(format, rs_name=rs_name)
 
-    def __str__(self, format="CONTIG", rs_name="rs"):
+    def __str__(self, format="CONTIG", rs_name="rs", ats=None):
         """format: CONTIG, PYMOL
-            if PYMOL, rs_name define the name of the pymol selection
+            if PYMOL, rs_name define the name of the pymol selection, ats for optional atom selection
         """
         mask=np.zeros_like(self.p.data.chain_index)
         if self.is_empty(): return ""
@@ -1960,7 +1962,16 @@ class RS(RL):
                 else:
                     out.append(k+",".join(seg))
         if format=="PYMOL":
-            return f"select {rs_name}, "+" or ".join(out)
+            ats=ATS(ats)
+            if ats.is_empty(): raise Exception("ats is empty in __str__")
+            s=" or ".join(out)
+            if ats.is_full():
+                return f"select {rs_name}, {s}"
+            else:
+                if len(out)>1:
+                    return f"select {rs_name}, ({s}) and name {str(ats).replace(",", "+")}"
+                else:
+                    return f"select {rs_name}, {s} and name {str(ats).replace(",", "+")}"
         else:
             return ":".join(out)
 

@@ -31,6 +31,9 @@ class PyMOL:
         return f(*args, **kwargs)
 
     def cmd(self, cmd_str):
+        return self.run(cmd_str)
+
+    def run(self, cmd_str):
         """cmd_str can be one command or multi-line string
         empty line or a line starts with # will be ignored"""
         # use pymol command line string
