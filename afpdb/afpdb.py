@@ -137,7 +137,7 @@ class Protein:
         if data is None or ((type(data) is str) and data ==''):
             data="MODEL     1\nENDMDL\nEND"
         if type(data) is pathlib.PosixPath:
-            data=str(data) 
+            data=str(data)
         if type(data) is str:
             if "\n" not in data:
                 ext=data.lower()[-4:]
@@ -1315,7 +1315,7 @@ class Protein:
 
     def _point_dist(self, center, rs, ats=None):
         rs=RS(self, rs)
-        if rs.is_empty(): util.error_msg("rs is empty!") 
+        if rs.is_empty(): util.error_msg("rs is empty!")
         ats=ATS(ats)
         if ats.is_empty(): util.error_msg("ats cannot be empty in _point_dist()!")
         a_rs = self.data.atom_positions[rs.data]
@@ -1969,9 +1969,9 @@ class RS(RL):
                 return f"select {rs_name}, {s}"
             else:
                 if len(out)>1:
-                    return f"select {rs_name}, ({s}) and name {str(ats).replace(",", "+")}"
+                    return f"select {rs_name}, ({s}) and name {str(ats).replace(',', '+')}"
                 else:
-                    return f"select {rs_name}, {s} and name {str(ats).replace(",", "+")}"
+                    return f"select {rs_name}, {s} and name {str(ats).replace(',', '+')}"
         else:
             return ":".join(out)
 
