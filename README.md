@@ -3,6 +3,10 @@
 The emergence of AlphaFold and subsequent protein AI models has revolutionized protein design. To maximize the probability of success, the AI-driven protein design process involves analyzing thousands of protein structures. This includes handling structure file read/write operations, aligning structures and measuring structural deviations, standardizing chain/residue labels, extracting residues, identifying mutations, and creating visualizations. However, existing programming packages do not fully address these challenges. To bridge this gap, we introduce the afpdb module. Built upon AlphaFold’s numpy architecture and leveraging the intuitive contig syntax proposed by RFDiffusion, afpdb streamlines structure analyses. While supplementing BioPython with dozens of methods commonly used in protein AI design but not readily available elsewhere; it also offers a user-friendly interface that seamlessly integrates with PyMOL’s visualization capabilities.
 ## Install
 ```
+pip install git+https://github.com/data2code/afpdb.git
+```
+or
+```
 git clone https://github.com/data2code/afpdb.git
 cd afpdb
 pip install .
