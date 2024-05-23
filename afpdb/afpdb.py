@@ -643,7 +643,13 @@ class Protein:
             _has_IPython = False
         check_Mol3D()
         obj=Mol3D()
-        html=obj.show(self.to_pdb_str(), show_sidechains=show_sidechains, show_mainchains=show_mainchains, color=color, style=style, width=width, height=height)
+        if color=="b":
+            # make sure b_factors are within [0, 1]
+            p=self.clone()
+            p.data.b_factors=p.data.b_factors.clip(0, 1)
+        else:
+            p=self
+        html=obj.show(p.to_pdb_str(), show_sidechains=show_sidechains, show_mainchains=show_mainchains, color=color, style=style, width=width, height=height)
         return IPython.display.publish_display_data({'application/3dmoljs_load.v0':html, 'text/html': html},metadata={})
 
     def sasa(self, in_chains=None):
