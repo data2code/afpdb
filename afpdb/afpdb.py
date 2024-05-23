@@ -1826,7 +1826,7 @@ class RL:
 
     @staticmethod
     def i(restype):
-        if len(restype)==3: restype=afres.restype_1to3.get(restype.upper(), restype)
+        if len(restype)==3: restype=afres.restype_3to1.get(restype.upper(), restype)
         return afres.restype_order.get(restype.upper(), -1)
 
 class RS(RL):
