@@ -1165,10 +1165,10 @@ class Protein:
     def rl(self, rl):
         return RL(self, rl)
 
-    def rs_around(self, rs, dist=5, ats=None, rs_within=None, drop_duplicates=True):
+    def rs_around(self, rs, dist=5, ats=None, rs_within=None, drop_duplicates=False):
         """select all residues not in rs and have at least one atom that is within dist to rs
 
-            If drop_duplicates is True, we keep only one closest neighbor per source residue
+            If drop_duplicates is True, we keep only one seed residue for each neighbor found
             If drop_duplicates is False, we keep all neighbors, then all interaction pairs are kept
 
             return a table with 3 columns: res_id_src, res_id_target, distance, sorted by distance descend
