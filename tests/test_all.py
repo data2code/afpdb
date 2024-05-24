@@ -19,11 +19,11 @@ def test_demo():
     c=p.seq_dict()
     assert c['P']=='NWFDITNWLWYIK', "Load object and seq_dict()"
 
-    rs_binders, df_dist=p.rs_around("P", dist=4)
+    rs_binders, rs_seed, df_dist=p.rs_around("P", dist=4, drop_duplicates=True)
     assert str(rs_binders)=="L33,92-95,97:H30,32,46,49-51,54,56-58,98,106-109", "rs_around, rs2str"
 
     assert(len(df_dist)==21), "df_dist"
-    p=p.extract(rs_binders | p.rs("P"))
+    p=p.extract(rs_binders | "P")
     p.save("test.pdb")
     assert(len(p)==34)
 
@@ -179,9 +179,11 @@ def test_ats():
     p=Protein()
     assert np.array_equal(ATS("N,CA,C,O").data, np.array([0,1,2,4])), "ats 1"
     assert np.array_equal(ATS(["N","CA","C","O"]).data, np.array([0,1,2,4])), "ats 2"
-    assert len(p.ats(""))==37, "ats 3"
+    assert len(p.ats(""))==0, "ats 3"
     assert len(p.ats(None))==37, "ats 4"
-    assert np.array_equal(p.ats_not(["N","CA","C","O"]).data, p.ats("CB,CG,CG1,CG2,OG,OG1,SG,CD,CD1,CD2,ND1,ND2,OD1,OD2,SD,CE,CE1,CE2,CE3,NE,NE1,NE2,OE1,OE2,CH2,NH1,NH2,OH,CZ,CZ2,CZ3,NZ,OXT").data), "ats 5"
+    assert len(p.ats("ALL"))==37, "ats 5"
+    assert len(p.ats("NULL"))==0, "ats 6"
+    assert np.array_equal(p.ats_not(["N","CA","C","O"]).data, p.ats("CB,CG,CG1,CG2,OG,OG1,SG,CD,CD1,CD2,ND1,ND2,OD1,OD2,SD,CE,CE1,CE2,CE3,NE,NE1,NE2,OE1,OE2,CH2,NH1,NH2,OH,CZ,CZ2,CZ3,NZ,OXT").data), "ats 6"
 
 def test_rs():
     p=Protein(fn)
@@ -244,14 +246,14 @@ def test_canonicalize_rs():
 def test_rs_around():
     p=Protein(fn)
     rs=p.rs("P")
-    rs_nbr, t=p.rs_around(rs, dist=3.5)
+    rs_nbr, r_seed, t=p.rs_around(rs, dist=3.5, drop_duplicates=True)
     assert p.rs2str(rs_nbr)=="L33,92-95:H30,56,58,98,106-109", "rs_around 1"
     assert len(t)==len(rs_nbr), "rs_around 2"
 
 def test_residue_id():
     p=Protein(fn)
     rs=p.rs("P")
-    rs_nbr, t=p.rs_around(rs, dist=3.5)
+    rs_nbr, rs_seed, t=p.rs_around(rs, dist=3.5, drop_duplicates=True)
     t.display()
     t2=t[(t.chain_b=="H")&(t.resn_b>="95")&(t.resn_b<="106")]
     t2.display()

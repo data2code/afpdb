@@ -1175,9 +1175,9 @@ class Protein:
         """select all residues not in rs and have at least one atom that is within dist to rs
 
             If drop_duplicates is True, we keep only one seed residue for each neighbor found
-            If drop_duplicates is False, we keep all neighbors, then all interaction pairs are kept
+            If drop_duplicates is False, we keep all seed residues for each neighbor, all interaction pairs are kept
 
-            return a table with 3 columns: res_id_src, res_id_target, distance, sorted by distance descend
+            return a table with 3 columns: rs_neighbor, rs_seed, distance, sorted by distance descend
         """
         rs=RS(self, rs)
         if rs.is_empty(): util.error_msg("rs is empty!")
@@ -1217,9 +1217,10 @@ class Protein:
         #t_dist[:10].display()
         # residues that are close and not in rs
         t_dist=t_dist[(t_dist['dist']<=dist)&(~ t_dist['resi_b'].isin(rs.data))].copy()
+        out=(RS(self, t_dist['resi_b']), RS(self, t_dist['resi_a']), t_dist)
         if drop_duplicates:
             t_dist.drop_duplicates('resi_b', inplace=True)
-        return RS(self, np.unique(t_dist['resi_b'].values)), t_dist
+        return out
 
     def rsi_missing(self):
         """Return a selection array (not a residue selection object) for missing residues.
