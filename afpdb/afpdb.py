@@ -1221,23 +1221,27 @@ class Protein:
             t_dist.drop_duplicates('resi_b', inplace=True)
         return RS(self, np.unique(t_dist['resi_b'].values)), t_dist
 
-    def rs_missing(self):
-        """Return a selection array for missing residues.
+    def rsi_missing(self):
+        """Return a selection array (not a residue selection object) for missing residues.
             self (p_old) contains missing residues.
             In AlphaFold, we replace X in the sequence by G, which leads to a new object p_new.
 
             The returned selection array points to the Gs in p_new
-            rs_m=p_old.rs_miss()
-            # rs_m cannot be used on p_old, as the missing residues do not exist in the backend ndarrays
-            # rs_m should be used on p_new, where the missing residues are no longer missing (replaced by G).
+            rsi_m=p_old.rsi_missing()
+            # rsi_m cannot be used on p_old, as the missing residues do not exist in the backend ndarrays
+            # rsi_m should be used on p_new, where the missing residues are no longer missing (replaced by G).
             # You should make sure p_old and p_new has the same chain order.
             # delete all G residues in p_new
-            p_no_G=p_new.extract(p_new.rs_not(rs_m))
+            p_no_G=p_new.extract(p_new.rs_not(rsi_m))
         """
         s=self.seq().replace(":", "") # need to remove ":", otherwise index is off
         if 'X' not in s:
-            return RS(self, []) # empty selection
-        return RS(self, np.array(util.index_all("X", list(s))))
+            return [] # empty selection
+        return np.array(util.index_all("X", list(s)))
+
+    def rs_missing(self):
+        print("Please use rsi_missing() instead. The method returns an index array, instead of an RS object.")
+        return self.rsi_missing()
 
     def rs_mutate(self, obj):
         """Return a selection for mutated residues.
