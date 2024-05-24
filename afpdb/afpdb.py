@@ -1165,10 +1165,10 @@ class Protein:
         e.data.atom_mask[sel_idx_e,...]=b.data.atom_mask[sel_idx_b,...]
         return e
 
-    def rs(self, rs):
+    def rs(self, rs=None):
         return RS(self, rs)
 
-    def rl(self, rl):
+    def rl(self, rl=None):
         return RL(self, rl)
 
     def rs_around(self, rs, dist=5, ats=None, rs_within=None, drop_duplicates=False):
@@ -1457,7 +1457,7 @@ class Protein:
             util.error_msg("ats cannot be empty in _point_dist()!")
 
         if align:
-            self.align(obj_b=obj_b, rl_a=rl_a, rl_b=rl_b, ats=ats)
+            self.align(target_p=obj_b, rl_a=rl_a, rl_b=rl_b, ats=ats)
 
         #print(self.data.atom_positions.shape, rl_a, rl_b)
         a_res = self.data.atom_positions[rl_a.data]
@@ -1907,8 +1907,8 @@ class RS(RL):
         rs_b=RS(self.p, rs_b)
         return RS(self.p, set(self.data)-set(rs_b.data))
 
-    def str(self, format="CONTIG", rs_name="rs"):
-        return self.__str__(format, rs_name=rs_name)
+    def str(self, format="CONTIG", rs_name="rs", ats=None):
+        return self.__str__(format, rs_name=rs_name, ats=ats)
 
     def __str__(self, format="CONTIG", rs_name="rs", ats=None):
         """format: CONTIG, PYMOL
