@@ -71,7 +71,7 @@ VQLVQSGAEVKRPGSSVTVSCKASGGSFSTYALSWVRQAPGRGLEWMGGVIPLLTITNYAPRFQGRITITADRSTSTAYL
 ### Interface Computing
 ```
 # identify H,L chain residues within 4A to antigen P chain
-binders, df_dist=p.rs_around("P", dist=4)
+rs_binder, rs_seed, df_dist=p.rs_around("P", dist=4)
 
 # show the distance of binder residues to antigen P chain
 df_dist[:5].display()
@@ -89,7 +89,7 @@ Output
 ### Residue Selection & Boolean Operations
 ```
 # create a new PDB file only containing the antigen and binder residues
-p=p.extract(binders | p.rs("P"))
+p=p.extract(rs_binder | "P")
 ```
 ### Structure I/O
 ```
