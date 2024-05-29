@@ -33,6 +33,16 @@ class PyMOL:
     def cmd(self, cmd_str):
         return self.run(cmd_str)
 
+    def rs(self, rs_name, p):
+        """Return residue index array for a PyMOL selection object 'rs_name'
+            p is an afpdb.afpdb.Protein object
+        """
+        out=[]
+        def f(chain, resi): out.append(chain+resi)
+        self.p.cmd.iterate(rs_name, "f(chain, resi)", space={'f':f})
+        out=[p.res_map.get(x) for x in out if x in p.res_map]
+        return p.rs(out)
+
     def run(self, cmd_str):
         """cmd_str can be one command or multi-line string
         empty line or a line starts with # will be ignored"""
