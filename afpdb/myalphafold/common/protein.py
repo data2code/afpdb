@@ -104,7 +104,7 @@ class Protein:
                 hetfield, resseq, icode = residue.id
                 resname = residue.resname
                 segid = residue.segid
-                resid = residue.id[1]
+                resid = str(residue.id[1])+residue.id[2].strip()
                 residue_index.append(resid)
                 chain_ids.append(chain_id)
                 aatype.append(residue_constants.restype_order_with_x.get(residue_constants.restype_3to1.get(resname)))
