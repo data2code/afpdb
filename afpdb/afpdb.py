@@ -1294,8 +1294,8 @@ class Protein:
         rs_a=RL(self, rsi_a)
         rs_b=RL(self, rsi_b)
         df=pd.DataFrame(data={
-            'chain_a':rs_a.chain(), 'resn_a':rs_a.name(), 'resn_i_a':rs_a.namei(), 'atom_a':atom_a,
-            'chain_b':rs_b.chain(), 'resn_b':rs_b.name(), 'resn_i_b':rs_b.namei(), 'atom_b':atom_b,
+            'chain_a':rs_a.chain(), 'resi_a':rsi_a, 'resn_a':rs_a.name(), 'resn_i_a':rs_a.namei(), 'atom_a':atom_a,
+            'chain_b':rs_b.chain(), 'resi_b':rsi_b, 'resn_b':rs_b.name(), 'resn_i_b':rs_b.namei(), 'atom_b':atom_b,
             'dist':d})
         df=df.sort_values('dist')
         if drop_duplicates:
@@ -1393,7 +1393,7 @@ class Protein:
         rsi_b, atsi_b, xyz_b=self._get_xyz(rs_b, ats)
 
         # all atom-to-atom distance
-        d=np.linalg.norm(a_res[:, None]-b_res[None, :], axis=-1).ravel()
+        d=np.linalg.norm(xyz_a[:, None]-xyz_b[None, :], axis=-1).ravel()
         n_a=len(rsi_a) # rows in xyz_a
         n_b=len(rsi_b) # rows in xyz_b
         # compute resiude index and atom index for rows in d
