@@ -1612,6 +1612,47 @@ class Protein:
         from .mypymol import PyMOL
         return PyMOL()
 
+    @staticmethod
+    def fold(seq, gap=50):
+        """Input sequence, missing residues can be represented as Xs, chains are concatenated by ':'.
+        E.g., for 5cli, use sequence:
+
+        Note: ESMFold can only predict a monomer, multimers are predicted by concatenating chains with poly-glycine.
+        gap defines the number of glycines used to link chains.
+        The final sequence length cannot exceed 400 for ESMFold service
+
+        Return: predicted Protein object
+        """
+        c_pos={}
+        b=0 #begin counter
+        i_len=0 # accumulated sequence length without gap
+        X_pos=[]
+        for i,s in enumerate(seq.split(":")):
+            chain=PDB_CHAIN_IDS[i]
+            # record position of X, without gap
+            X_pos.extend([j+i_len for j,aa in enumerate(s) if aa=='X'])
+            i_len+=len(s)
+            # record chain position (b,e) with gap
+            e=b+len(s)-1 # end position
+            c_pos[chain]=(b, e)
+            b=e+gap+1
+        seq2 = seq.replace("X", "G").replace(":", "G"*gap)
+
+        if len(seq2)>400:
+            raise Exception(f"ESMFold service cannot handle sequence (including gaps) longer than 400 residues.")
+        try:
+            foldedP = requests.post("https://api.esmatlas.com/foldSequence/v1/pdb/", data=seq2, verify=False)
+        except Exception as error:
+            print("An exception was raised when calling the API", error)
+
+        pdbstr=foldedP.content.decode("utf-8")
+        if 'TITLE     ESMFOLD V1 PREDICTION FOR INPUT' not in pdbstr:
+            raise Exception(f"ESMFold service did not return valid PDB content:\n{pdbstr}")
+        #util.save_string('t.pdb', pdbstr)
+        p=Protein(pdbstr)
+        p.split_chains(c_pos, inplace = True)
+        return (p.extract(~p.rs(X_pos)))
+
 class ATS:
 
     def __init__(self, ats=None):
@@ -1964,47 +2005,6 @@ class RS(RL):
                     return f"select {rs_name}, {s} and name {str(ats).replace(',', '+')}"
         else:
             return ":".join(out)
-
-    @staticmethod
-    def fold(seq, gap=50):
-        """Input sequence, missing residues can be represented as Xs, chains are concatenated by ':'.
-        E.g., for 5cli, use sequence:
-
-        Note: ESMFold can only predict a monomer, multimers are predicted by concatenating chains with poly-glycine.
-        gap defines the number of glycines used to link chains.
-        The final sequence length cannot exceed 400 for ESMFold service
-
-        Return: predicted Protein object
-        """
-        c_pos={}
-        b=0 #begin counter
-        i_len=0 # accumulated sequence length without gap
-        X_pos=[]
-        for i,s in enumerate(seq.split(":")):
-            chain=PDB_CHAIN_IDS[i]
-            # record position of X, without gap
-            X_pos.extend([j+i_len for j,aa in enumerate(s) if aa=='X'])
-            i_len+=len(s)
-            # record chain position (b,e) with gap
-            e=b+len(s)-1 # end position
-            c_pos[chain]=(b, e)
-            b=e+gap+1
-        seq2 = seq.replace("X", "G").replace(":", "G"*gap)
-
-        if len(seq2)>400:
-            raise Exception(f"ESMFold service cannot handle sequence (including gaps) longer than 400 residues.")
-        try:
-            foldedP = requests.post("https://api.esmatlas.com/foldSequence/v1/pdb/", data=seq2, verify=False)
-        except Exception as error:
-            print("An exception was raised when calling the API", error)
-
-        pdbstr=foldedP.content.decode("utf-8")
-        if 'TITLE     ESMFOLD V1 PREDICTION FOR INPUT' not in pdbstr:
-            raise Exception(f"ESMFold service did not return valid PDB content:\n{pdbstr}")
-        #util.save_string('t.pdb', pdbstr)
-        p=Protein(pdbstr)
-        p.split_chains(c_pos, inplace = True)
-        return (p.extract(~p.rs(X_pos)))
 
 if __name__=="__main__":
 
