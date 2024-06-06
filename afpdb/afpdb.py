@@ -1965,6 +1965,7 @@ class RS(RL):
         else:
             return ":".join(out)
 
+    @staticmethod
     def fold(seq, gap=50):
         """Input sequence, missing residues can be represented as Xs, chains are concatenated by ':'.
         E.g., for 5cli, use sequence:
@@ -1975,7 +1976,7 @@ class RS(RL):
 
         Return: predicted Protein object
         """
-        c_pos={}
+        c_pos={}j
         b=0 #begin counter
         i_len=0 # accumulated sequence length without gap
         X_pos=[]
@@ -2033,7 +2034,7 @@ if __name__=="__main__":
         # remove six residues, they will be shown as "X" in sequence
         p=p.extract(~ p.rs("H10-15"))
         s=p.seq()
-        predicted = fold(s, gap = 50)
+        predicted = Protein.fold(s, gap = 50)
         assert(s == predicted.seq())
         x=predicted.rmsd(p, "A:B", "L:H", ats="N,CA,C,O", align=True)
         print("Ab RMSD:", x)
