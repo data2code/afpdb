@@ -17,7 +17,8 @@ setup(
                       'biopython',
                       'dm-tree',
                       'py3Dmol',
-                      'tabulate'
+                      'tabulate',
+                      'requests'
                       ],
 
     classifiers=[
