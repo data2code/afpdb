@@ -15,7 +15,7 @@ from scipy.stats import rankdata
 from Bio.PDB import MMCIFParser, PDBParser, MMCIF2Dict, PDBIO, Structure
 import numpy as np, pandas as pd
 import tempfile
-import os,re,traceback,pathlib
+import os,re,traceback,pathlib,requests
 
 def check_Mol3D():
     if not _Mol3D_:
@@ -264,22 +264,22 @@ class Protein:
         # PDB order
         return util.unique2([chains[x] for x in self.data.chain_index ])
 
-    def rs_missing_atoms(self, debug=False):
+    def rs_missing_atoms(self, ats=None, debug=False):
         """a residue selection object pointing to residues with missing atoms"""
         p=self.data
         n,m=p.atom_positions.shape[:2]
         out=[]
         chains=self.chain_id()
+        ats=ATS(ats)
+        c_map={afres.restype_order[k]:ATS(np.array([afres.atom_order[x] for x in afres.residue_atoms[v]])) for k,v in afres.restype_1to3.items() }
+        c_map={k:(v & ats).data for k,v in c_map.items()}
         for i,res in enumerate(p.aatype):
             if res >= 20: continue # residu X
-            aa=afres.restype_1to3[afres.restypes[res]]
-            atoms=afres.residue_atoms[aa]
-            i_atoms=np.array([afres.atom_order[x] for x in atoms])
-            mask=p.atom_mask[i, i_atoms]
+            mask=p.atom_mask[i, c_map.get(res)] > 0
             if not np.all(mask):
                 if debug:
-                    out=[ a for a,x in zip(atoms, mask) if x<1 ]
-                    print(f"Missing atoms: {out}")
+                    out2=[ a for a,x in zip(atoms, mask) if x<1 ]
+                    print(f"Missing atoms: {out2}")
                 out.append(i)
         return RS(self, out)
 
@@ -636,6 +636,7 @@ class Protein:
         # Load the PDB structure
         parser = PDBParser()
         structure = parser.get_structure("mypdb", tmp)
+        os.remove(tmp)
         return structure
 
     def html(self, show_sidechains=False, show_mainchains=False, color="chain", style="cartoon", width=320, height=320):
@@ -1115,6 +1116,8 @@ class Protein:
         c_pos=self.chain_pos()
         t['First Residue Name']=t.Chain.apply(lambda k: self.data.residue_index[c_pos[k][0]])
         t['Last Residue Name']=t.Chain.apply(lambda k: self.data.residue_index[c_pos[k][1]])
+        miss_bb=util.unique_count(self.rs_missing_atoms(ats="N,CA,C,O").chain())
+        t['#Missing Backbone']=t.Chain.apply(lambda k: miss_bb.get(k, 0))
         return t
 
     @staticmethod
@@ -1179,7 +1182,56 @@ class Protein:
     def rl(self, rl=None):
         return RL(self, rl)
 
-    def rs_around(self, rs, dist=5, ats=None, rs_within=None, drop_duplicates=False):
+    def _get_xyz(self, rs, ats):
+        """Extract atom XYZ coordinate, the corresponding residue id and atom id will also be returned
+            this is an internal method, so we assume rs is an RS object and ats is an ATS object,
+            so we don't waste time converting them again
+        """
+        if ats.not_full():
+            mask=self.data.atom_mask[rs.data][:, ats.data] > 0
+            res=self.data.atom_positions[rs.data][:, ats.data][mask].reshape(-1,3)
+        else:
+            mask=self.data.atom_mask[rs.data] > 0
+            res=self.data.atom_positions[rs.data][mask].reshape(-1,3)
+        mask=mask.ravel()
+        n=len(rs.data)
+        n_ats=len(ats)
+        # residue idx
+        rsi= np.repeat(rs.data, n_ats)[mask]
+        # atom idx
+        atsi=np.tile(ats.data, n)[mask]
+        return (rsi, atsi, res)
+
+    def _get_xyz_pair(self, target_p, rs_a, rs_b, ats):
+        """internal method, rs and ats must be RS and ATS object, return pairs of atoms, where both masks are 1,
+            used for align and rmsd"""
+        if ats.not_full():
+            mask_a=self.data.atom_mask[np.ix_(rs_a.data, ats.data)] > 0
+            mask_b=target_p.data.atom_mask[np.ix_(rs_b.data, ats.data)] > 0
+            mask=mask_a & mask_b
+            res_a=self.data.atom_positions[np.ix_(rs_a.data, ats.data)][mask].reshape(-1,3)
+            res_b=target_p.data.atom_positions[np.ix_(rs_b.data, ats.data)][mask].reshape(-1,3)
+        else:
+            mask_a=self.data.atom_mask[rs_a.data] > 0
+            mask_b=target_p.data.atom_mask[rs_b.data] > 0
+            mask=mask_a & mask_b
+            res_a=self.data.atom_positions[rs_a.data][mask].reshape(-1,3)
+            res_b=target_p.data.atom_positions[rs_b.data][mask].reshape(-1,3)
+        mask=mask.ravel()
+        n_a=len(rs_a.data)
+        n_b=len(rs_b.data)
+        n_ats=len(ats)
+        # residue idx
+        rsi_a= np.repeat(rs_a.data, n_ats)[mask]
+        rsi_b= np.repeat(rs_b.data, n_ats)[mask]
+        # atom idx
+        atsi_a=np.tile(ats.data, n_a)[mask]
+        atsi_b=np.tile(ats.data, n_b)[mask]
+
+        return (rsi_a, atsi_a, rsi_b, atsi_b, res_a, res_b)
+
+
+    def rs_around(self, rs, dist=5, ats=None, rs_within=None, drop_duplicates=False, kdtree_bucket_size=10):
         """select all residues not in rs and have at least one atom that is within dist to rs
 
             If drop_duplicates is True, we keep only one seed residue for each neighbor found
@@ -1194,41 +1246,61 @@ class Protein:
         if ats.is_empty():
             util.error_msg("ats cannot be empty in rs_around()!")
 
-        #print(rs, rs_b)
-        # acceleration
-        def get_xyz(rs, ats):
-            """Extract atom XYZ coordinate, the corresponding residue id will also be returned"""
-            xyz=self.data.atom_positions[rs.data]
-            n=xyz.shape[1]
-            mask=self.data.atom_mask[rs.data]
-            if ats.not_full():
-                xyz=xyz[:, ats.data]
-                mask=mask[:, ats.data]
-            n=xyz.shape[1]
-            res=np.repeat(rs.data, n).reshape(-1, n)
-            xyz=xyz.reshape(-1, 3)
-            mask=mask.reshape(-1)>0
-            res=res.reshape(-1)
-            xyz=xyz[mask]
-            res=res[mask]
-            return (res, xyz)
+        def box(xyz, dist):
+            """Return the vertices for min/max box"""
+            return (np.min(xyz, axis=0).reshape(-1,3)-dist, np.max(xyz, axis=0).reshape(-1,3)+dist)
 
-        # only consider the residues within the box [-dist+xyz_min, xyz_max+dist], important for large structures
-        idx_rs, xyz_rs=get_xyz(rs, ats)
-        idx_b, xyz_b=get_xyz(rs_b, ats)
-        xyz_min=np.min(xyz_rs, axis=0).reshape(-1,3)-dist
-        xyz_max=np.max(xyz_rs, axis=0).reshape(-1,3)+dist
-        mask = np.min((xyz_b>=xyz_min) & (xyz_b<=xyz_max), axis=1)
-        rs_b=RS(self, np.unique(idx_b[mask]))
+        rsi_a, atsi_a, xyz_a=self._get_xyz(rs, ats)
+        rsi_b, atsi_b, xyz_b=self._get_xyz(rs_b, ats)
 
-        t_dist=self.rs_dist(rs, rs_b, ats=ats)
-        #t_dist[:10].display()
-        # residues that are close and not in rs
-        t_dist=t_dist[(t_dist['dist']<=dist)&(~ t_dist['resi_b'].isin(rs.data))].copy()
-        out=(RS(self, t_dist['resi_b']), RS(self, t_dist['resi_a']), t_dist)
+        if kdtree_bucket_size>0:
+            from Bio.PDB.kdtrees import KDTree
+            kdt=KDTree(xyz_b, bucket_size=kdtree_bucket_size)
+            points=[kdt.search(center, dist) for center in xyz_a]
+            repeat=np.array([len(x) for x in points])
+            neighbor=np.array([point.index for x in points for point in x])
+            rsi_a=np.repeat(rsi_a, repeat, axis=0)
+            atsi_a=np.repeat(atsi_a, repeat, axis=0)
+            xyz_a=np.repeat(xyz_a, repeat, axis=0)
+            rsi_b, atsi_b, xyz_b=rsi_b[neighbor], atsi_b[neighbor], xyz_b[neighbor]
+            d=np.linalg.norm(xyz_a-xyz_b, axis=-1)
+        else:
+            min_a, max_a=box(xyz_a, dist)
+            min_b, max_b=box(xyz_b, dist)
+            mask_b=np.min((xyz_b>=min_a) & (xyz_b<=max_a), axis=1)
+            rsi_b, atsi_b, xyz_b=rsi_b[mask_b], atsi_b[mask_b], xyz_b[mask_b]
+            mask_a=np.min((xyz_a>=min_b) & (xyz_a<=max_b), axis=1)
+            rsi_a, atsi_a, xyz_a=rsi_a[mask_a], atsi_a[mask_a], xyz_a[mask_a]
+
+            # all atom-to-atom distance
+            d=np.linalg.norm(xyz_a[:, None]-xyz_b[None, :], axis=-1).ravel()
+            mask= d<=dist
+
+            n_a=len(rsi_a) # rows in res_a
+            n_b=len(rsi_b) # rows in res_b
+            # compute resiude index and atom index for rows in d
+            # residue idx
+            rsi_a= np.repeat(rsi_a, n_b)[mask]
+            rsi_b= np.tile(rsi_b, n_a)[mask]
+            # atom idx
+            atsi_a=np.repeat(atsi_a, n_b)[mask]
+            atsi_b=np.tile(atsi_b, n_a)[mask]
+            d=d[mask]
+
+        at=np.array(afres.atom_types)
+        atom_a=at[atsi_a]
+        atom_b=at[atsi_b]
+
+        rs_a=RL(self, rsi_a)
+        rs_b=RL(self, rsi_b)
+        df=pd.DataFrame(data={
+            'chain_a':rs_a.chain(), 'resi_a':rsi_a, 'resn_a':rs_a.name(), 'resn_i_a':rs_a.namei(), 'atom_a':atom_a,
+            'chain_b':rs_b.chain(), 'resi_b':rsi_b, 'resn_b':rs_b.name(), 'resn_i_b':rs_b.namei(), 'atom_b':atom_b,
+            'dist':d})
+        df=df.sort_values('dist')
         if drop_duplicates:
-            t_dist.drop_duplicates('resi_b', inplace=True)
-        return out
+            df.drop_duplicates('resi_b', inplace=True)
+        return (RS(self, rsi_b), RS(self, rsi_a), df)
 
     def rsi_missing(self):
         """Return a selection array (not a residue selection object) for missing residues.
@@ -1312,149 +1384,77 @@ class Protein:
 
     def _atom_dist(self, rs_a, rs_b, ats=None):
         ats=ATS(ats)
-        if ats.is_empty(): return np.array()
+        if ats.is_empty(): util.error_msg("ats is emtpy!")
         rs_a=RS(self, rs_a)
         rs_b=RS(self, rs_b)
         if rs_a.is_empty(): util.error_msg("rs_a is emtpy!")
         if rs_b.is_empty(): util.error_msg("rs_b is emtpy!")
-        a_res = self.data.atom_positions[rs_a.data]
-        a_mask = self.data.atom_mask[rs_a.data].copy()
-        b_res = self.data.atom_positions[rs_b.data]
-        b_mask = self.data.atom_mask[rs_b.data].copy()
+        rsi_a, atsi_a, xyz_a=self._get_xyz(rs_a, ats)
+        rsi_b, atsi_b, xyz_b=self._get_xyz(rs_b, ats)
 
-        if ats.not_full():
-            notats=(~ats).data
-            a_mask[:,notats]=0
-            b_mask[:,notats]=0
+        # all atom-to-atom distance
+        d=np.linalg.norm(xyz_a[:, None]-xyz_b[None, :], axis=-1).ravel()
+        n_a=len(rsi_a) # rows in xyz_a
+        n_b=len(rsi_b) # rows in xyz_b
+        # compute resiude index and atom index for rows in d
+        # residue idx
+        rsi_a= np.repeat(rsi_a, n_b)
+        rsi_b= np.tile(rsi_b, n_a)
+        # atom idx
+        atsi_a=np.repeat(atsi_a, n_b)
+        atsi_b=np.tile(atsi_b, n_a)
+        at=np.array(afres.atom_types)
+        atom_a=at[atsi_a]
+        atom_b=at[atsi_b]
 
-        d = cldprt._np_norm(a_res[None, :, None, :, :] - b_res[:, None, :, None, :])
-        mask = a_mask[None, :, None, :] * b_mask[:, None, :, None]
-        d[~mask.astype(np.bool_)] = np.inf
-        return d
+        df=pd.DataFrame(data={'resi_a':rsi_a, 'atom_a':atom_a, 'resi_b':rsi_b, 'atom_b':atom_b, 'dist':d})
+        return df
 
     def _point_dist(self, center, rs, ats=None):
         rs=RS(self, rs)
         if rs.is_empty(): util.error_msg("rs is empty!")
         ats=ATS(ats)
         if ats.is_empty(): util.error_msg("ats cannot be empty in _point_dist()!")
-        a_rs = self.data.atom_positions[rs.data]
-        a_mask = self.data.atom_mask[rs.data].copy()
+        rsi, atsi, xyz=self._get_xyz(rs, ats)
 
-        if ats.not_full():
-            notats=(~ats).data
-            mask[:,notats]=0
-
-        d = cldprt._np_norm(a_rs[:, :, :] - center.reshape(1,1,3))
-        d[~a_mask.astype(np.bool_)] = np.inf
-        return d
+        d = np.linalg.norm(res - center.reshape(1,3), axis=-1)
+        at=np.array(afres.atom_types)
+        atom=at[atsi]
+        df=pd.DataFrame(data={'resi':rsi, 'atom':atom, 'dist':d})
+        return df
 
     def atom_dist(self, rs_a, rs_b, ats=None):
-        ats=ATS(ats)
-        if ats.is_empty(): util.error_msg("ats cannot be empty in atom_dist()!")
-        rs_a=self.rs(rs_a)
-        rs_b=self.rs(rs_b)
-        if rs_a.is_empty(): util.error_msg("rs_a cannot be empty in atom_dist()!")
-        if rs_b.is_empty(): util.error_msg("rs_b cannot be empty in atom_dist()!")
-        d=self._atom_dist(rs_a, rs_b, ats)
-        df = pd.DataFrame()
-        n_a=len(rs_a)
-        n_b=len(rs_b)
-        n_atom=afres.atom_type_num
-        df['resn_a'] = np.tile(np.repeat(self.data.residue_index[rs_a.data], n_atom*n_atom), n_b)
-        df['resi_a'] = np.tile(np.repeat(rs_a.data, n_atom*n_atom), n_b)
-        df['resn_b'] = np.repeat(np.repeat(self.data.residue_index[rs_b.data], n_atom*n_atom), n_a)
-        df['resi_b'] = np.repeat(np.repeat(rs_b.data, n_atom*n_atom), n_a)
-        df['atom_a'] = np.tile(afres.atom_types, n_a*n_b*n_atom)
-        df['atom_b'] = np.tile(np.repeat(afres.atom_types, n_atom), n_a*n_b)
-        df['dist'] = d.flatten()
-        df.replace([np.inf, -np.inf], np.nan, inplace=True)
-        df.dropna(subset=['dist'], inplace=True)
-        df=df.sort_values('dist')
-        rs_a2=RL(self, df.resi_a)
-        rs_b2=RL(self, df.resi_b)
-        df['chain_a']=rs_a2.chain()
-        df['resn_i_a']=rs_a2.namei()
-        df['chain_b']=rs_b2.chain()
-        df['resn_i_b']=rs_b2.namei()
-        df['res_a']=rs_a2.aa()
-        df['res_b']=rs_b2.aa()
+        df=self._atom_dist(rs_a, rs_b, ats)
+        rs_a=RL(self, df.resi_a.values)
+        rs_b=RL(self, df.resi_b.values)
+        df['chain_a']=rs_a.chain()
+        df['resn_a']=rs_a.name()
+        df['resn_i_a']=rs_a.namei()
+        df['chain_b']=rs_b.chain()
+        df['resn_b']=rs_b.name()
+        df['resn_i_b']=rs_b.namei()
+        df['res_a']=rs_a.aa()
+        df['res_b']=rs_b.aa()
         df=df[['chain_a','resn_a','resn_i_a','resi_a','res_a','chain_b','resn_b','resn_i_b','resi_b','res_b','dist','atom_a','atom_b']]
+        df=df.sort_values('dist')
         return df
 
     def rs_dist(self, rs_a, rs_b, ats=None):
-        ats=ATS(ats)
-        if ats.is_empty():
-            util.error_msg("ats cannot be empty in _point_dist()!")
-        rs_a=self.rs(rs_a)
-        rs_b=self.rs(rs_b)
-        if rs_a.is_empty(): util.error_msg("rs_a is empty!")
-        if rs_b.is_empty(): util.error_msg("rs_b is empty!")
-        d=self._atom_dist(rs_a, rs_b, ats)
-        # res_list = np.argwhere(d.min(axis=(0, 2, 3)) < 3)
-        # print('+'.join(p.data.residue_index[res_list].squeeze()))
-        df = pd.DataFrame()
-        n_a=len(rs_a)
-        n_b=len(rs_b)
-        df['resn_a'] = np.tile(self.data.residue_index[rs_a.data], n_b)
-        df['resi_a'] = np.tile(rs_a.data, n_b)
-        df['resn_b'] = np.repeat(self.data.residue_index[rs_b.data], n_a)
-        df['resi_b'] = np.repeat(rs_b.data, n_a)
-        n_atom=afres.atom_type_num
-        d2=d.reshape(n_a*n_b, n_atom*n_atom)
-        idx_pair=d2.argmin(axis=1) #figure out which atom-pair contributes to the min
-        atom_a=np.tile(afres.atom_types, n_atom)
-        atom_b=np.repeat(afres.atom_types, n_atom)
-        df['dist'] = np.min(d, axis=(2, 3, 4)).flatten()
-        df['atom_a']=atom_a[idx_pair]
-        df['atom_b']=atom_b[idx_pair]
-        #df.display()
-        #print(np.nanmax(d, axis=(2, 3, 4)).flatten())
-        #df[:50].display()
-        df.replace([np.inf, -np.inf], np.nan, inplace=True)
-        df.dropna(subset=['dist'], inplace=True)
-        df=df.sort_values('dist')
-        rs_a2=RL(self, df.resi_a)
-        rs_b2=RL(self, df.resi_b)
-        df['resn_i_a']=rs_a2.namei()
-        df['resn_i_b']=rs_b2.namei()
-        df['chain_a']=rs_a2.chain()
-        df['chain_b']=rs_b2.chain()
-        df['res_a']=rs_a2.aa()
-        df['res_b']=rs_b2.aa()
-        df=df[['chain_a','resn_a','resn_i_a','resi_a','res_a','chain_b','resn_b','resn_i_b','resi_b','res_b','dist','atom_a','atom_b']]
-        #df.display()
-        return df
+        df=self.atom_dist(rs_a, rs_b, ats)
+        return df.drop_duplicates(['resi_a','resi_b'])
 
     def rs_dist_to_point(self, center, rs=None, ats=None):
         """Rank residues (within rs) according to their shortest distance to a point
             center: np.array(3) for XYZ
         """
-        ats=ATS(ats)
-        if ats.is_empty():
-            util.error_msg("ats cannot be empty in _point_dist()!")
-        rs=self.rs(rs)
-        d=self._point_dist(center, rs, ats)
-        df = pd.DataFrame()
-
-        n=len(rs)
-        df['resn'] = self.data.residue_index[rs]
-        df['resi'] = rs
-        idx=d.argmin(axis=1).reshape(-1) #figure out which atom-pair contributes to the min
-        df['dist'] = np.min(d, axis=(1)).flatten()
-        print(afres.atom_types, idx)
-        df['atom']=np.array(afres.atom_types)[idx]
-        #df.display()
-        #print(np.nanmax(d, axis=(2, 3, 4)).flatten())
-        #df[:50].display()
-        df.replace([np.inf, -np.inf], np.nan, inplace=True)
-        df.dropna(subset=['dist'], inplace=True)
+        df=self._point_dist(center, rs, ats)
+        rs=RL(self, df.resi.values)
+        df['chain_a']=rs.chain()
+        df['resn']=rs.name()
+        df['resn_i']=rs.namei()
+        df['res']=rs.aa()
+        df=df[['chain','resn','resn_i','resi','res','atom','dist']]
         df=df.sort_values('dist')
-        rs_b=RL(self, df.resi.values)
-        df['resn_i']=rs_b.namei()
-        df['chain']=rs_b.chain()
-        df['res']=rs_b.aa()
-        df=df[['chain','resn','resn_i','resi','res','dist','atom']]
-        #df.display()
         return df
 
     def rmsd(self, obj_b, rl_a=None, rl_b=None, ats=None, align=False):
@@ -1467,26 +1467,15 @@ class Protein:
         assert(len(rl_a)==1 or len(rl_b)==1 or len(rl_a)==len(rl_b))
         ats=ATS(ats)
         if ats.is_empty():
-            util.error_msg("ats cannot be empty in _point_dist()!")
+            util.error_msg("ats cannot be empty in rmsd()!")
 
         if align:
-            self.align(target_p=obj_b, rl_a=rl_a, rl_b=rl_b, ats=ats)
+            R,t=self.align(target_p=obj_b, rl_a=rl_a, rl_b=rl_b, ats=ats)
 
-        #print(self.data.atom_positions.shape, rl_a, rl_b)
-        a_res = self.data.atom_positions[rl_a.data]
-        a_mask = self.data.atom_mask[rl_a.data].copy()
-        b_res = obj_b.data.atom_positions[rl_b.data]
-        b_mask = obj_b.data.atom_mask[rl_b.data].copy()
-        if ats.not_full():
-            notats=(~ats).data
-            a_mask[:,notats]=0
-            b_mask[:,notats]=0
-
-        if a_res.shape!=b_res.shape:
-            print("WARNING> selections do not share the same shape!", a_res.shape, "vs", b_res_.shape)
-        d = cldprt._np_norm(a_res - b_res)
-        d=d[a_mask*b_mask>0]
-        #print(d)
+        (rsi_a, atsi_a, rsi_b, atsi_b, res_a, res_b) = self._get_xyz_pair(obj_b, rl_a, rl_b, ats)
+        if res_a.shape!=res_b.shape:
+            print("WARNING> selections do not share the same shape!", res_a.shape, "vs", res_b.shape)
+        d=np.linalg.norm(res_a - res_b, axis=-1)
         n=d.shape[0]
         return np.sqrt(np.sum(d*d)/n)
 
@@ -1539,41 +1528,23 @@ class Protein:
         ats=ATS(ats)
         if ats.is_empty():
             util.error_msg("ats cannot be empty in align()!")
-        res_idx_a=RL(self, rl_a).data
-        res_idx_b=RL(target_p, rl_b).data
-        if len(res_idx_a)!=len(res_idx_b):
-            raise Exception(f"Two selections have different residues: {len(res_idx_a)}, {len(res_idx_b)}.")
-        if len(res_idx_a)==0:
-            raise Exception(f"Empty residue selection: {len(res_idx_a)}, {len(res_idx_b)}.")
-        Ma=self.data.atom_positions
-        Mb=target_p.data.atom_positions
-        ma=self.data.atom_mask
-        mb=target_p.data.atom_mask
-        if res_idx_a is not None:
-            Ma=Ma[res_idx_a]
-            ma=ma[res_idx_a]
-        if res_idx_b is not None:
-            Mb=Mb[res_idx_b]
-            mb=mb[res_idx_b]
-        if ats.not_full():
-            Ma=Ma[:, ats.data]
-            Mb=Mb[:, ats.data]
-            ma=ma[:, ats.data]
-            mb=mb[:, ats.data]
-        a=Ma.reshape(-1,3)
-        b=Mb.reshape(-1,3)
-        #print(Ma.shape, Mb.shape, a.shape, b.shape, ma.shape, mb.shape)
-        m=(ma.reshape(-1)>0) & (mb.reshape(-1)>0)
-        a=a[m]
-        b=b[m]
-        if (a.shape != b.shape):
+        rl_a=RL(self, rl_a)
+        rl_b=RL(target_p, rl_b)
+        if len(rl_a)!=len(rl_b):
+            raise Exception(f"Two selections have different residues: {len(rl_a)}, {len(rl_b)}.")
+        if len(rl_a)==0:
+            raise Exception(f"Empty residue selection: {len(rl_a)}, {len(rl_b)}.")
+        (rsi_a, atsi_a, rsi_b, atsi_b, res_a, res_b)=self._get_xyz_pair(target_p, rl_a, rl_b, ats)
+        if (res_a.shape != res_b.shape):
             raise Exception(f"Two selections have different atoms after masking: {a.shape}, {b.shape}.")
-        R,t=rot_a2b(a,b)
+        R,t=rot_a2b(res_a,res_b)
         M=self.data.atom_positions
         n=M.shape
-        Ma=rot_a(M.reshape(-1,3), R, t)
-        Ma=Ma.reshape(*n)
-        self.data.atom_positions[...]=Ma
+        mask=self.data.atom_mask.ravel() > 0
+        Ma=M.reshape(-1,3)
+        Mb=rot_a(Ma[mask], R, t)
+        Ma[mask]=Mb
+        self.data.atom_positions[...]=Ma.reshape(*n)
         return (R, t)
 
     def dssp(self, simplify=False):
@@ -1641,11 +1612,53 @@ class Protein:
         from .mypymol import PyMOL
         return PyMOL()
 
+    @staticmethod
+    def fold(seq, gap=50):
+        """Input sequence, missing residues can be represented as Xs, chains are concatenated by ':'.
+        E.g., for 5cli, use sequence:
+
+        Note: ESMFold can only predict a monomer, multimers are predicted by concatenating chains with poly-glycine.
+        gap defines the number of glycines used to link chains.
+        The final sequence length cannot exceed 400 for ESMFold service
+
+        Return: predicted Protein object
+        """
+        from .myalphafold.common.protein import PDB_CHAIN_IDS
+        c_pos={}
+        b=0 #begin counter
+        i_len=0 # accumulated sequence length without gap
+        X_pos=[]
+        for i,s in enumerate(seq.split(":")):
+            chain=PDB_CHAIN_IDS[i]
+            # record position of X, without gap
+            X_pos.extend([j+i_len for j,aa in enumerate(s) if aa=='X'])
+            i_len+=len(s)
+            # record chain position (b,e) with gap
+            e=b+len(s)-1 # end position
+            c_pos[chain]=(b, e)
+            b=e+gap+1
+        seq2 = seq.replace("X", "G").replace(":", "G"*gap)
+
+        if len(seq2)>400:
+            raise Exception(f"ESMFold service cannot handle sequence (including gaps) longer than 400 residues.")
+        try:
+            foldedP = requests.post("https://api.esmatlas.com/foldSequence/v1/pdb/", data=seq2, verify=False)
+        except Exception as error:
+            print("An exception was raised when calling the API", error)
+
+        pdbstr=foldedP.content.decode("utf-8")
+        if 'TITLE     ESMFOLD V1 PREDICTION FOR INPUT' not in pdbstr:
+            raise Exception(f"ESMFold service did not return valid PDB content:\n{pdbstr}")
+        #util.save_string('t.pdb', pdbstr)
+        p=Protein(pdbstr)
+        p.split_chains(c_pos, inplace = True)
+        return (p.extract(~p.rs(X_pos)))
+
 class ATS:
 
     def __init__(self, ats=None):
         """atoms should be comma/space-separated str, or a list of atoms"""
-        if ats is None or ats=="ALL":
+        if ats is None or (type(ats) in (str, np.str_) and ats.upper()=="ALL"):
             self.data=np.arange(afres.atom_type_num)
         elif type(ats) is str and ats.upper() in ("","NULL","NONE"):
             self.data=np.array([])
@@ -1733,7 +1746,7 @@ class RL:
             self.data=np.array(rs)
         elif rs is None:
             self.data=np.arange(len(self.p))
-        elif type(rs)==str:
+        elif type(rs) in (str, np.str_):
             self.data=self._rs(rs)
         else:
             util.error_msg(f"Unexpected selection type: {type(rs)}!")
@@ -1764,7 +1777,7 @@ class RL:
 
         return indicies for atom_positions
         """
-        if contig is None or contig=='ALL': return np.arange(len(self.p))
+        if contig is None or (type(contig) is str and contig=='ALL'): return np.arange(len(self.p))
         # '' should be empty, b/c the str(empty_selection) should return ''
         if type(contig) is str and contig in ('','NONE','NULL'): return np.array([])
 
@@ -1994,7 +2007,6 @@ class RS(RL):
         else:
             return ":".join(out)
 
-
 if __name__=="__main__":
 
     fn_ab="/da/NBC/ds/lib/example_files/5cil.pdb"
@@ -2015,9 +2027,22 @@ if __name__=="__main__":
         assert len(RS(p, "L-100")._not(rs_in_chains="L"))==11, "rs_notin"
         print(RS(p, "L-100")._not(rs_in_chains="L"))
         assert str(rs1 | rs2)=="L1-3:H1-5", "rs2str"
-
-
         exit()
+
+    if True: # folding
+        p=Protein("tutorial/example_files/5cil.pdb")
+        print(p.seq())
+        # remove six residues, they will be shown as "X" in sequence
+        p=p.extract(~ p.rs("H10-15"))
+        s=p.seq()
+        predicted = Protein.fold(s, gap = 50)
+        assert(s == predicted.seq())
+        x=predicted.rmsd(p, "A:B", "L:H", ats="N,CA,C,O", align=True)
+        print("Ab RMSD:", x)
+        x=predicted.rmsd(p, "C", "P", ats="N,CA,C,O", align=False)
+        print("Ag RMSD:", x)
+        exit()
+
     if True:
         p=Protein(fn_ab)
         print(p.seq())
