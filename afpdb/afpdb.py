@@ -1976,7 +1976,7 @@ class RS(RL):
 
         Return: predicted Protein object
         """
-        c_pos={}j
+        c_pos={}
         b=0 #begin counter
         i_len=0 # accumulated sequence length without gap
         X_pos=[]
