@@ -1623,6 +1623,7 @@ class Protein:
 
         Return: predicted Protein object
         """
+        from .myalphafold.common.protein import PDB_CHAIN_IDS
         c_pos={}
         b=0 #begin counter
         i_len=0 # accumulated sequence length without gap
