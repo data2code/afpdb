@@ -305,8 +305,6 @@ class Protein:
         """
             merge_chains is meant for preparing PDB so that it complexes can be model with AF monomer
             please keep the original copy or save chain_pos, you will need chain_pos to break the
-            monomer back into a multi-chain complex later
-
             residue numbering will be redone as the result, for AF monomer
             you may want to provide a 200 gap in numbering bewteen original chains
         """
@@ -1547,11 +1545,38 @@ class Protein:
         self.data.atom_positions[...]=Ma.reshape(*n)
         return (R, t)
 
-    def dssp(self, simplify=False):
+    @staticmethod
+    def locate_dssp():
+        # default values used by Biopython
+        bin="dssp"
+        version="3.9.9"
+    
+        def search_cmd():
+            import platform
+            return "where" if platform.system() == "Windows" else "which"
+        search=search_cmd()
+        for DSSP in ["mkdssp", "dssp"]:
+            bin=util.unix(f"{search} {DSSP}", l_print=False).split("\n")[0]
+            if bin!="": break
+        if bin!="":
+            m=re.search(r'(?P<ver>[\d.]+)$', util.unix(f"{bin} --version", l_print=False))
+            if m is not None: version=m.group('ver')
+        else:
+            print("WARNING: mkdssp is not found, please consider install it with: conda install sbl::dssp")
+        return {"DSSP":bin, "dssp_version":version}
+
+    def dssp(self, simplify=False, DSSP="mkdssp", dssp_version="3.9.9"):
+        """Biopython relies on users specify the executable dssp command and it version
+            if you get empty output, chances are your DSSP binary/version is different from the default
+            # to find out your settings, use command
+            which mkdssp
+            mkdssp --version
+
+        """
         from Bio.PDB.DSSP import dssp_dict_from_pdb_file
         tmp=tempfile.NamedTemporaryFile(dir="/tmp", delete=False, suffix=".pdb").name
         self.save(tmp)
-        dssp_tuple = dssp_dict_from_pdb_file(tmp)
+        dssp_tuple = dssp_dict_from_pdb_file(tmp, DSSP=DSSP, dssp_version=dssp_version)
         os.remove(tmp)
         dict_ss={} # secondary structure by chain
         for k,v in dssp_tuple[0].items():
@@ -1649,6 +1674,7 @@ class Protein:
             foldedP = requests.post("https://api.esmatlas.com/foldSequence/v1/pdb/", data=seq2, verify=False)
         except Exception as error:
             print("An exception was raised when calling the API", error)
+            return None
 
         pdbstr=foldedP.content.decode("utf-8")
         if 'TITLE     ESMFOLD V1 PREDICTION FOR INPUT' not in pdbstr:
