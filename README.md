@@ -1,6 +1,45 @@
-# afpdb - An Efficient Protein Structure Manipulation Tool
+# Afpdb - An Efficient Protein Structure Manipulation Tool
 
 The emergence of AlphaFold and subsequent protein AI models has revolutionized protein design. To maximize the probability of success, the AI-driven protein design process involves analyzing thousands of protein structures. This includes handling structure file read/write operations, aligning structures and measuring structural deviations, standardizing chain/residue labels, extracting residues, identifying mutations, and creating visualizations. However, existing programming packages do not fully address these challenges. To bridge this gap, we introduce the afpdb module. Built upon AlphaFold’s numpy architecture and leveraging the intuitive contig syntax proposed by RFDiffusion, afpdb streamlines structure analyses. While supplementing BioPython with dozens of methods commonly used in protein AI design but not readily available elsewhere; it also offers a user-friendly interface that seamlessly integrates with PyMOL’s visualization capabilities.
+
+## Tutorial
+
+To learn and practice afpdb, open our [tutorial notebook](https://colab.research.google.com/github/data2code/afpdb/blob/main/tutorial/afpdb.ipynb) it in Google Colab.
+Or access the <a href="tutorial/afpdb.pdf">PDF</a> version.
+
+High-level Table of Content in the Tutorial
+
+1. Installation
+2. Demo
+3. Fundermental Concepts
+   1. Internal Data Structure
+   2. Contig 
+4. Selection
+   1. Atom Selection
+   2. Residue Selection
+   3. Residue List
+5. Read/Write
+6. Sequence
+7. Chain
+8. Geometry, Measurement, & Visualization
+   1. Select Neighboring Residues
+   2. B-factors
+   3. PyMOL Interface
+   4. RMSD
+   5. Solvent-Accessible Surface Area (SASA)
+   6. Secondary Structures - DSSP
+   7. Internal Coordinates
+9. Object Manipulation
+   1. Move Objects
+   2. Align
+   3. Split & Merge Objects
+10. Example AI Protein Design Use Cases
+   1. Handle Missing Residues in AlphaFold Prediction
+   2. Structure Prediction with ESMFold
+   3. Create Side Chains for de novo Designed Proteins
+   4. Compute Binding Scores in EvoPro
+11. Developer's Notes
+
 ## Install
 ```
 pip install git+https://github.com/data2code/afpdb.git
@@ -104,6 +143,3 @@ p.show(show_sidechains=True)
 Output (It will be 3D interactive within Jupyter Notebook)<br>
 <img src="tutorial/img/demo.png">
 
-## Tutorial
-
-To learn and practice afpdb, open our [tutorial notebook](https://colab.research.google.com/github/data2code/afpdb/blob/main/tutorial/afpdb.ipynb) it in Google Colab.
