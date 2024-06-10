@@ -22,17 +22,17 @@ High-level Table of Content in the Tutorial
 6. Sequence
 7. Chain
 8. Geometry, Measurement, & Visualization
-   1. Select Neighboring Residues
-   2. B-factors
-   3. PyMOL Interface
-   4. RMSD
-   5. Solvent-Accessible Surface Area (SASA)
-   6. Secondary Structures - DSSP
-   7. Internal Coordinates
+   - Select Neighboring Residues
+   - B-factors
+   - PyMOL Interface
+   - RMSD
+   - Solvent-Accessible Surface Area (SASA)
+   - Secondary Structures - DSSP
+   - Internal Coordinates
 9. Object Manipulation
-   1. Move Objects
-   2. Align
-   3. Split & Merge Objects
+   - Move Objects
+   - Align
+   - Split & Merge Objects
 10. Example AI Protein Design Use Cases
    - Handle Missing Residues in AlphaFold Prediction
    - Structure Prediction with ESMFold
