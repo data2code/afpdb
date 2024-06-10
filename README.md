@@ -19,9 +19,8 @@ High-level Table of Content in the Tutorial
    - Residue Selection
    - Residue List
 5. Read/Write
-6. Sequence
-7. Chain
-8. Geometry, Measurement, & Visualization
+6. Sequence & Chain
+7. Geometry, Measurement, & Visualization
    - Select Neighboring Residues
    - B-factors
    - PyMOL Interface
@@ -29,16 +28,16 @@ High-level Table of Content in the Tutorial
    - Solvent-Accessible Surface Area (SASA)
    - Secondary Structures - DSSP
    - Internal Coordinates
-9. Object Manipulation
+8. Object Manipulation
    - Move Objects
    - Align
    - Split & Merge Objects
-10. Example AI Protein Design Use Cases
+9. Example AI Protein Design Use Cases
    - Handle Missing Residues in AlphaFold Prediction
    - Structure Prediction with ESMFold
    - Create Side Chains for de novo Designed Proteins
    - Compute Binding Scores in EvoPro
-11. Developer's Notes
+10. Developer's Notes
 
 ## Install
 ```
