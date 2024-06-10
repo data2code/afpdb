@@ -1550,7 +1550,7 @@ class Protein:
         # default values used by Biopython
         bin="dssp"
         version="3.9.9"
-    
+
         def search_cmd():
             import platform
             return "where" if platform.system() == "Windows" else "which"
@@ -1559,8 +1559,12 @@ class Protein:
             bin=util.unix(f"{search} {DSSP}", l_print=False).split("\n")[0]
             if bin!="": break
         if bin!="":
-            m=re.search(r'(?P<ver>[\d.]+)$', util.unix(f"{bin} --version", l_print=False))
-            if m is not None: version=m.group('ver')
+            S=[x for x in util.unix(f"{bin} --version", l_print=False).split("\n") if ' version ' in x]
+            m=None
+            if len(S):
+                m=re.search(r'version\s+(?P<ver>[\d.]+)$', S[0])
+                if m is not None: version=m.group('ver')
+
         else:
             print("WARNING: mkdssp is not found, please consider install it with: conda install sbl::dssp")
         return {"DSSP":bin, "dssp_version":version}
