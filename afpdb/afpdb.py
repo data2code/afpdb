@@ -1621,6 +1621,8 @@ class Protein:
         gap defines the number of glycines used to link chains.
         The final sequence length cannot exceed 400 for ESMFold service
 
+        WARNING: ESMFold only allows infrequent submissions, so this is not suitable for large-scale structure prediction
+
         Return: predicted Protein object
         """
         from .myalphafold.common.protein import PDB_CHAIN_IDS
@@ -1628,9 +1630,11 @@ class Protein:
         b=0 #begin counter
         i_len=0 # accumulated sequence length without gap
         X_pos=[]
+        seq=seq.upper()
         for i,s in enumerate(seq.split(":")):
             chain=PDB_CHAIN_IDS[i]
             # record position of X, without gap
+            if len(s.replace("X", ""))==0: continue
             X_pos.extend([j+i_len for j,aa in enumerate(s) if aa=='X'])
             i_len+=len(s)
             # record chain position (b,e) with gap
