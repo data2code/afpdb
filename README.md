@@ -12,12 +12,12 @@ High-level Table of Content in the Tutorial
 1. Installation
 2. Demo
 3. Fundermental Concepts
-   1. Internal Data Structure
-   2. Contig 
+   - Internal Data Structure
+   - Contig 
 4. Selection
-   1. Atom Selection
-   2. Residue Selection
-   3. Residue List
+   - Atom Selection
+   - Residue Selection
+   - Residue List
 5. Read/Write
 6. Sequence
 7. Chain
@@ -34,10 +34,10 @@ High-level Table of Content in the Tutorial
    2. Align
    3. Split & Merge Objects
 10. Example AI Protein Design Use Cases
-   1. Handle Missing Residues in AlphaFold Prediction
-   2. Structure Prediction with ESMFold
-   3. Create Side Chains for de novo Designed Proteins
-   4. Compute Binding Scores in EvoPro
+   - Handle Missing Residues in AlphaFold Prediction
+   - Structure Prediction with ESMFold
+   - Create Side Chains for de novo Designed Proteins
+   - Compute Binding Scores in EvoPro
 11. Developer's Notes
 
 ## Install
