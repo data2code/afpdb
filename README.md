@@ -4,23 +4,21 @@ The emergence of AlphaFold and subsequent protein AI models has revolutionized p
 
 ## Tutorial
 
-To learn and practice afpdb, open our [tutorial notebook](https://colab.research.google.com/github/data2code/afpdb/blob/main/tutorial/afpdb.ipynb) it in Google Colab.
-Or access the <a href="tutorial/afpdb.pdf">PDF</a> version.
+To learn and practice afpdb, open [tutorial notebook](https://colab.research.google.com/github/data2code/afpdb/blob/main/tutorial/afpdb.ipynb) in Google Colab. (<a href="tutorial/afpdb.pdf">PDF</a> version).
 
-High-level Table of Content in the Tutorial
+Table of Content
 
-1. Installation
-2. Demo
-3. Fundermental Concepts
+1. Demo
+2. Fundermental Concepts
    - Internal Data Structure
    - Contig 
-4. Selection
+3. Selection
    - Atom Selection
    - Residue Selection
    - Residue List
-5. Read/Write
-6. Sequence & Chain
-7. Geometry, Measurement, & Visualization
+4. Read/Write
+5. Sequence & Chain
+6. Geometry, Measurement, & Visualization
    - Select Neighboring Residues
    - B-factors
    - PyMOL Interface
@@ -28,16 +26,26 @@ High-level Table of Content in the Tutorial
    - Solvent-Accessible Surface Area (SASA)
    - Secondary Structures - DSSP
    - Internal Coordinates
-8. Object Manipulation
+7. Object Manipulation
    - Move Objects
    - Align
    - Split & Merge Objects
-9. Example AI Protein Design Use Cases
+
+## AI Use Cases
+
+Interested in applying Afpdb to AI protein design? Open [tutorial notebook](https://colab.research.google.com/github/data2code/afpdb/blob/main/tutorial/AI.ipynb) in Google Colab. (<a href="tutorial/AI.pdf">PDF</a> version).
+
+Table of Content
+
+- Example AI Protein Design Use Cases
    - Handle Missing Residues in AlphaFold Prediction
    - Structure Prediction with ESMFold
    - Create Side Chains for de novo Designed Proteins
    - Compute Binding Scores in EvoPro
-10. Developer's Notes
+
+## Developer's Note
+
+Open [tutorial notebook](https://colab.research.google.com/github/data2code/afpdb/blob/main/tutorial/Developer.ipynb) in Google Colab. (<a href="tutorial/Developer.pdf">PDF</a> version).
 
 ## Install
 ```
