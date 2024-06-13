@@ -1266,6 +1266,7 @@ class Protein:
             'chain_b':rs_b.chain(), 'resi_b':rsi_b, 'resn_b':rs_b.name(), 'resn_i_b':rs_b.namei(), 'atom_b':atom_b,
             'dist':d})
         df=df.sort_values('dist')
+        df.drop_duplicates(['resi_a','resi_b'], inplace=True)
         if drop_duplicates:
             df.drop_duplicates('resi_b', inplace=True)
         return (RS(self, rsi_b), RS(self, rsi_a), df)
