@@ -143,7 +143,7 @@ def test_chain():
     p=Protein(fn)
     assert "".join(p.chain_id())=="LHP", "chain 1"
 
-    p.reorder_chains(["P","L","H"])
+    p.reorder_chains(["P","L","H"], inplace=True)
     assert not check_p(p), "chain 2"
     assert "".join(p.chain_id())=="PLH", "chain 3"
 
@@ -155,15 +155,15 @@ def test_chain():
 
     p=Protein(fk)
     q=p.data_prt
-    p._renumber(None)
+    p.renumber(None, inplace=True)
     assert ",".join(q.residue_index)=="5,6A,6B,10,3,4", "_renumber None"
-    p._renumber("RESTART")
+    p.renumber("RESTART", inplace=True)
     assert ",".join(q.residue_index)=="1,2A,2B,6,1,2", "_renumber RESTART"
-    p._renumber("CONTINUE")
+    p.renumber("CONTINUE", inplace=True)
     assert ",".join(q.residue_index)=="1,2A,2B,6,7,8", "_renumber CONTINUE"
-    p._renumber("GAP33")
+    p.renumber("GAP33", inplace=True)
     assert ",".join(q.residue_index)=="1,2A,2B,6,40,41", "_renumber GAP33"
-    p._renumber("NOCODE")
+    p.renumber("NOCODE", inplace=True)
     assert ",".join(q.residue_index)=="1,2,3,7,8,9", "_renumber NOCODE"
 
     p=Protein(fn)
@@ -349,6 +349,7 @@ def test_move():
     p=Protein(fk)
     assert np.all(np.isclose(p.center(), np.array([ 15.54949999,-8.0205001,-15.39166681]))), "center"
     q=p.center_at([3.0,4.0,5.0], inplace=False)
+    print(q.center())
     assert np.all(np.isclose(q.center(), np.array([ 3.,4.,5.]))), "center_at"
     q=p.translate([1.,0.,-1.], inplace=False)
     assert np.abs(q.rmsd(p, None, None, "CA")-1.414)<0.001, "translate"
@@ -361,7 +362,7 @@ def test_move():
     assert q.rmsd(p, None, None, "CA") < 1, "rotate 2"
 
     p.rotate(np.random.random(3), np.random.random()*180)
-    p.reset_pos()
+    p.reset_pos(inplace=True)
     assert np.all(np.isclose(p.center(), np.zeros(3))), "reset_pos"
 
 def test_align():

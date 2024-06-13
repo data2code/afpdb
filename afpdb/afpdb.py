@@ -301,7 +301,7 @@ class Protein:
         c_pos={chains[k]:v for k,v in c_pos.items()}
         return c_pos
 
-    def merge_chains(self, gap=200, inplace=True):
+    def merge_chains(self, gap=200, inplace=False):
         """
             merge_chains is meant for preparing PDB so that it complexes can be model with AF monomer
             please keep the original copy or save chain_pos, you will need chain_pos to break the
@@ -434,7 +434,7 @@ class Protein:
             self._make_res_map()
         return old
 
-    def renumber(self, renumber=None, inplace=True):
+    def renumber(self, renumber=None, inplace=False):
         obj = self if inplace else self.clone()
         old_num=obj._renumber(renumber)
         return (obj, old_num)
@@ -470,7 +470,7 @@ class Protein:
         self._make_res_map()
         return old_num
 
-    def split_chains(self, c_pos, renumber=None, inplace=True):
+    def split_chains(self, c_pos, renumber=None, inplace=False):
         """
             The key for c_pos are the desired chain name for the output structure
             The value for c_pos are the residue index in the original structure
@@ -489,7 +489,7 @@ class Protein:
         obj._renumber(renumber)
         return obj
 
-    def reorder_chains(self, chains, renumber='RESTART', inplace=True):
+    def reorder_chains(self, chains, renumber='RESTART', inplace=False):
         """
             chains is the list of chain names in the new order
             if renumber, residue number will start from 1 for each chain
@@ -748,47 +748,7 @@ class Protein:
         io.set_structure(structure)
         io.save(pdb_file2)
 
-    def _in_atom_list(self, atom_list, inplace=True):
-        not_id=np.array([ i for i,x in enumerate(afres.atom_types) if x not in atom_list ])
-        obj=self if inplace else self.clone()
-        obj.data.atom_positions[:, not_id, :]=0.0
-        obj.data.atom_mask[:, not_id]=0
-        obj.data.b_factors[:, not_id]=0
-        obj.data_str=obj.to_pdb_str()
-        return obj
-
-    def ca_only(self, inplace=True):
-        return self._in_atom_list(['CA'], inplace=inplace)
-
-    def backbone_only(self, inplace=True):
-        return self._in_atom_list(['N','CA','C'], inplace=inplace)
-
-    def reverse(self, chains=None, inplace=True):
-        """chains: list of chain ids to reverse, if None, all chains,
-            reverse means the chain will go from C to N term.
-            residue will be renumbered as well
-        """
-
-        def flip_array(m, np_chain, chains=None, axis=0):
-            m2=m.copy()
-            if chains is None:
-                chains=np.unique(np_chain)
-            for c in chains:
-                idx=np.where(np_chain == c)
-                if len(idx):
-                    m2[idx]=np.flip(m2[idx], axis=axis)
-            m[...]=m2
-
-        obj=self if inplace else self.clone()
-        np_chain=obj.data.chain_index
-        flip_array(obj.data.aatype, np_chain, chains=chains)
-        flip_array(obj.data.atom_positions, np_chain, chains=chains)
-        flip_array(obj.data.atom_mask, np_chain, chains=chains)
-        flip_array(obj.data.b_factors, np_chain, chains=chains)
-        obj.data_str=obj.to_pdb_str()
-        return obj
-
-    def fill_pos_with_ca(self, backbone_only=False, cacl_cb=False, inplace=True):
+    def fill_pos_with_ca(self, backbone_only=False, cacl_cb=False, inplace=False):
         """file missing atom positions by Ca
             if backbone_only, only assign positions to N, CA, C
             calc_cb, if True, also compute missing Cb position (for non-Gly, if N, CA, C were not missing)
@@ -812,7 +772,7 @@ class Protein:
             obj.data.atom_mask[i,mask]=1
         return obj
 
-    def _thread_sequence(self, seq, inplace=True):
+    def _thread_sequence(self, seq, inplace=False):
         """This does not work, b/c the peptide bond is not sured to be planary, should use pyrosetta instead"""
         create_residue_position()
         obj=self if inplace else self.clone()
@@ -878,22 +838,22 @@ class Protein:
         """center of CA mass"""
         return np.mean(self.data.atom_positions[:,1], axis=0)
 
-    def translate(self, v, inplace=True):
+    def translate(self, v, inplace=False):
         """Move structure by a vector v"""
         obj=self if inplace else self.clone()
         obj.data.atom_positions[obj.data.atom_mask>0]= \
             obj.data.atom_positions[obj.data.atom_mask>0]+v
         return obj
 
-    def center_at(self, v=None, inplace=True):
+    def center_at(self, v=None, inplace=False):
         '''position the structure, so that the new center is at v'''
         obj=self if inplace else self.clone()
         c=obj.center()
         if v is None: v=np.zeros(3)
-        obj.translate(v-c)
+        obj.translate(v-c, inplace=True)
         return obj
 
-    def rotate(self, ax, theta, inplace=True):
+    def rotate(self, ax, theta, inplace=False):
         """Rotate by axis ax with theta angle, note: center is the origin
             theta should be in the unit of degree, e.g., 90
         """
@@ -920,9 +880,10 @@ class Protein:
         ax=np.cross(a, b)
         return (ax, ang)
 
-    def reset_pos(self):
+    def reset_pos(self, inplace=False):
         '''Set center at origin, align the PCA axis along, Z, X and Y'''
-        self.center_at()
+        obj=self if inplace else self.clone()
+        obj.center_at(inplace=True)
         # center of mass at origin
 
         #https://github.com/ljmartin/align/blob/main/0.2%20aligning%20principal%20moments%20of%20inertia.ipynb
@@ -952,7 +913,7 @@ class Protein:
             return eigvecs[:, indices].T
 
         for i in range(2): # Rotate twice
-            X=self.data.atom_positions[:, 1] # CA
+            X=obj.data.atom_positions[:, 1] # CA
             pmi=get_pmi(X)
             # rotate major axis to Z, minor to X (in PyMOL, X goes out of the screen, Z at right, Y at Up)
             if i==0:
@@ -962,22 +923,25 @@ class Protein:
                 b=np.array([0.,0.,1.])
                 idx=0
             ax, ang = Protein.rotate_a2b(pmi[idx], b)
-            self.rotate(ax, ang*180/np.pi)
+            obj.rotate(ax, ang*180/np.pi, inplace=True)
+        return obj
         #X=self.data.atom_positions[:, 1] # CA
         #mi=calc_m_i(X)
         #X=p.data.atom_positions[:,1]
         #print(np.min(X, axis=0), np.max(X, axis=0))
         #print(mi)
 
-    def spin_to(self, phi, theta):
+    def spin_to(self, phi, theta, inplace=False):
         """Assume the molecule is pointing at Z, rotate it to point at phi, theta,
             theta is the angle wrt Z, phi is the angle wrt to X,
             see https://math.stackexchange.com/questions/2247039/angles-of-a-known-3d-vector
         You should first center the molecule!
         """
-        self.rotate(np.array([0.,0.,1.]), phi)
+        obj=self if inplace else self.clone()
+        obj.rotate(np.array([0.,0.,1.]), phi, inplace=True)
         ax=np.array([np.sin(phi), -np.cos(phi), 0])
-        self.rotate(ax, theta)
+        obj.rotate(ax, theta, inplace=True)
+        return obj
 
     @staticmethod
     def _unit_vec(v):
@@ -1068,7 +1032,7 @@ class Protein:
             S.append(aa)
         return "".join(S)
 
-    def rename_chains(self, c_chains, inplace=True):
+    def rename_chains(self, c_chains, inplace=False):
         """c_chains is dict, key is old chain name, value is new chain name"""
         obj=self if inplace else self.clone()
         chains=obj.chain_id()
@@ -1257,11 +1221,14 @@ class Protein:
             points=[kdt.search(center, dist) for center in xyz_a]
             repeat=np.array([len(x) for x in points])
             neighbor=np.array([point.index for x in points for point in x])
-            rsi_a=np.repeat(rsi_a, repeat, axis=0)
-            atsi_a=np.repeat(atsi_a, repeat, axis=0)
-            xyz_a=np.repeat(xyz_a, repeat, axis=0)
-            rsi_b, atsi_b, xyz_b=rsi_b[neighbor], atsi_b[neighbor], xyz_b[neighbor]
-            d=np.linalg.norm(xyz_a-xyz_b, axis=-1)
+            if len(neighbor)==0:
+                rsi_a,rsi_b,atsi_a,atsi_b,d=np.empty(0, dtype=int), np.empty(0, dtype=int), np.empty(0, dtype=int), np.empty(0, dtype=int), np.empty(0)
+            else:
+                rsi_a=np.repeat(rsi_a, repeat, axis=0)
+                atsi_a=np.repeat(atsi_a, repeat, axis=0)
+                xyz_a=np.repeat(xyz_a, repeat, axis=0)
+                rsi_b, atsi_b, xyz_b=rsi_b[neighbor], atsi_b[neighbor], xyz_b[neighbor]
+                d=np.linalg.norm(xyz_a-xyz_b, axis=-1)
         else:
             min_a, max_a=box(xyz_a, dist)
             min_b, max_b=box(xyz_b, dist)
@@ -1270,20 +1237,23 @@ class Protein:
             mask_a=np.min((xyz_a>=min_b) & (xyz_a<=max_b), axis=1)
             rsi_a, atsi_a, xyz_a=rsi_a[mask_a], atsi_a[mask_a], xyz_a[mask_a]
 
-            # all atom-to-atom distance
-            d=np.linalg.norm(xyz_a[:, None]-xyz_b[None, :], axis=-1).ravel()
-            mask= d<=dist
+            if len(rsi_a)==0 or len(rsi_b)==0:
+               rsi_a,rsi_b,atsi_a,atsi_b,d=np.empty(0, dtype=int), np.empty(0, dtype=int), np.empty(0, dtype=int), np.empty(0, dtype=int), np.empty(0)
+            else:
+                # all atom-to-atom distance
+                d=np.linalg.norm(xyz_a[:, None]-xyz_b[None, :], axis=-1).ravel()
+                mask= d<=dist
 
-            n_a=len(rsi_a) # rows in res_a
-            n_b=len(rsi_b) # rows in res_b
-            # compute resiude index and atom index for rows in d
-            # residue idx
-            rsi_a= np.repeat(rsi_a, n_b)[mask]
-            rsi_b= np.tile(rsi_b, n_a)[mask]
-            # atom idx
-            atsi_a=np.repeat(atsi_a, n_b)[mask]
-            atsi_b=np.tile(atsi_b, n_a)[mask]
-            d=d[mask]
+                n_a=len(rsi_a) # rows in res_a
+                n_b=len(rsi_b) # rows in res_b
+                # compute resiude index and atom index for rows in d
+                # residue idx
+                rsi_a= np.repeat(rsi_a, n_b)[mask]
+                rsi_b= np.tile(rsi_b, n_a)[mask]
+                # atom idx
+                atsi_a=np.repeat(atsi_a, n_b)[mask]
+                atsi_b=np.tile(atsi_b, n_a)[mask]
+                d=d[mask]
 
         at=np.array(afres.atom_types)
         atom_a=at[atsi_a]
@@ -1321,6 +1291,17 @@ class Protein:
     def rs_missing(self):
         print("Please use rsi_missing() instead. The method returns an index array, instead of an RS object.")
         return self.rsi_missing()
+
+    def rs_insertion(self, p_missing):
+        """object p_missing contains missing residues, which were replaced by glycine in the self object
+        This methid is to return a selection for those inserted glycines, so that they can be removed:
+
+            p=Protein("alphafold_pred.pdb")
+            rs_G=p.rs_insertion(Protein("experiment.pdb"))
+            q=p.extract(~ rs_G)
+            # q no longer has any inserted residues
+        """
+        return RS(self, rsi_missing(p_missing))
 
     def rs_mutate(self, obj):
         """Return a selection for mutated residues.
