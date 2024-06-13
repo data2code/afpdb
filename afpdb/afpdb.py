@@ -659,12 +659,13 @@ class Protein:
         html=obj.show(p.to_pdb_str(), show_sidechains=show_sidechains, show_mainchains=show_mainchains, color=color, style=style, width=width, height=height)
         return IPython.display.publish_display_data({'application/3dmoljs_load.v0':html, 'text/html': html},metadata={})
 
-    def sasa(self, in_chains=None):
-        """in_chains is a contig that describe what to be used as the object"""
-        if in_chains is not None:
-            obj=self.extract(in_chains)
-        else:
-            obj=self
+    def sasa(self, rs_chain=None):
+        """in_chains is a contig that describe what to be used as the object
+            Return:
+                SASA: solvent-accessible surface area
+                rSASA: relative SASA, see dsasa() method for definition
+        """
+        obj=self.extract(rs_chain)
         structure=obj.to_biopython()
         from Bio.PDB.SASA import ShrakeRupley
         sasa = ShrakeRupley()
@@ -676,8 +677,74 @@ class Protein:
                 out.append([chain.id, f"{resid[1]}{resid[2].strip()}", int(resid[1]), residue.sasa])
         t=pd.DataFrame(data=out, columns=["chain","resn","resn_i","SASA"])
         t['resi']=t.apply(lambda r: self.res_map[r['chain']+r['resn']], axis=1)
-        t=t[['chain','resn','resn_i','resi','SASA']]
+        t['aa']=RL(self, t.resi.values).aa()
+
+        # add relative sasa
+        # where the max sasa is defined as Miller et al. 1987 in
+        # https://arxiv.org/pdf/1211.4251
+        max_sasa={
+            'A':113.0, 'R':241.0, 'N':158.0, 'D':151.0, 'C':140.0,
+            'E':183.0, 'Q':189.0, 'G':85.0, 'H':194.0, 'I':182.0,
+            'L':180.0, 'K':211.0, 'M':204.0, 'F':218.0, 'P':143.0,
+            'S':122.0, 'T':146.0, 'W':259.0, 'Y':229.0, 'V':160.0
+        }
+        t['rSASA']=t.SASA.values/t.aa.map(max_sasa)
+        t=t[['chain','resn','resn_i','resi','aa','SASA','rSASA']]
         #t.display()
+        return t
+
+    def dsasa(self, rs_chain_a, rs_chain_b):
+        """Classify residues based on SASA, according to:
+            Levy ED, A Simple Definition of Structural Regions in Proteins and
+            Its Use in Analyzing Interface Evolution
+            https://doi.org/10.1016/j.jmb.2010.09.028
+
+        rs_chain_a and rs_chain_b are chains designating the two components that
+        defines the interface. E.g. for an Ab-Ag complex with chains H:L:G
+        (G for antigen)
+
+        p.dsasa("H", "L") study the interface between H and L within Ab
+        p.dsasa("H:L", "G") study the interface between Ab and Ag
+
+        Return dataframe
+            rSASAm: relative accessible area for monomers
+            rSASAc: relative accessible area for the complex
+            dSASA: rSASAm-rSASAc
+            label: classification labels
+                core: key interacting residues
+                support: residue in the interface that are not solvent accessible
+                rim: around the edge of the binding interface
+                surface: surface residues not involved in the interaction
+                interior: interior residues not exposed to solvent
+        """
+        rs_a=self.rs(rs_chain_a)
+        rs_b=self.rs(rs_chain_b)
+        if len(rs_a & rs_b)>0:
+            raise Exception("Two selections cannot overlap.")
+        t_a=self.sasa(rs_a)
+        t_b=self.sasa(rs_b)
+        # monomer
+        t_m=pd.concat([t_a, t_b], ignore_index=True)
+        t_m.rename2({'rSASA':'rSASAm', 'SASA':'SASAm'})
+        # complex
+        t_c=self.sasa(rs_a | rs_b)
+        t_c.rename2({'rSASA':'rSASAc', 'SASA':'SASAc'})
+        t=t_m.merge(t_c, on=['chain','resi','resn','resn_i','aa'])
+        t['drSASA']=t['SASAm']-t['SASAc']
+
+        def label(r):
+            rASAc=r['rSASAc']
+            rASAm=r['rSASAm']
+            drASA=r['drSASA']
+            if drASA>0:
+                if rASAm<0.25: return 'support'
+                if rASAc<0.25: return 'core'
+                return 'rim'
+            else:
+                if rASAc<0.25: return 'interior'
+                return 'surface'
+
+        t['label']=t.apply(label, axis=1)
         return t
 
     def save(self, filename, format=None):
@@ -2026,6 +2093,18 @@ class RS(RL):
 if __name__=="__main__":
 
     fn_ab="/da/NBC/ds/lib/example_files/5cil.pdb"
+    if True: # dsasa
+        p=Protein('1ppf')
+        print(p.seq_dict())
+        rs=p.rs('I10,15,20,21,29,32,36,42,43,50')
+        print(rs, rs.name(), rs.aa())
+        t=p.dsasa("E","I")
+        t=t[t.resi.isin(rs.data)]
+        print('Selection: I10,15,20,21,29,32,36,42,43,50')
+        print("Answer: SUR,COR,COR,RIM,RIM,COR,RIM,SUR,SUR,INT")
+        t.display()
+        exit()
+
     if True:
         p=Protein(fn_ab)
         print(p.seq_dict())
