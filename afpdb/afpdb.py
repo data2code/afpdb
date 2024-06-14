@@ -1369,7 +1369,7 @@ class Protein:
             q=p.extract(~ rs_G)
             # q no longer has any inserted residues
         """
-        return RS(self, rsi_missing(p_missing))
+        return RS(self, p_missing.rsi_missing())
 
     def rs_mutate(self, obj):
         """Return a selection for mutated residues.

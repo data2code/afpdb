@@ -107,6 +107,12 @@ def test_pdb_str():
     p=Protein(p.to_pdb_str())
     assert check_p(p), "create from PDB string"
 
+def test_missing():
+    p=Protein(fn)
+    q=p.extract(~p.rs("H10-14"))
+    rs_missing=p.rs_insertion(q)
+    assert str(rs_missing)=="H10-14"
+
 ### Sequence, missing residues, insertion code
 def test_inplace():
     p=Protein(fn)
