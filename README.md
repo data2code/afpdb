@@ -4,7 +4,7 @@ The emergence of AlphaFold and subsequent protein AI models has revolutionized p
 
 ## Tutorial
 
-To learn and practice afpdb, open [tutorial notebook](https://colab.research.google.com/github/data2code/afpdb/blob/main/tutorial/afpdb.ipynb) in Google Colab. (<a href="tutorial/afpdb.pdf">PDF</a> version).
+To learn and practice afpdb, open [Tutorial Notebook](https://colab.research.google.com/github/data2code/afpdb/blob/main/tutorial/afpdb.ipynb) in Google Colab. (<a href="tutorial/afpdb.pdf">PDF</a> version).
 
 Table of Content
 
@@ -33,7 +33,7 @@ Table of Content
 
 ## AI Use Cases
 
-Interested in applying Afpdb to AI protein design? Open [tutorial notebook](https://colab.research.google.com/github/data2code/afpdb/blob/main/tutorial/AI.ipynb) in Google Colab. (<a href="tutorial/AI.pdf">PDF</a> version).
+Interested in applying Afpdb to AI protein design? Open [AI Use Case Notebook](https://colab.research.google.com/github/data2code/afpdb/blob/main/tutorial/AI.ipynb) in Google Colab. (<a href="tutorial/AI.pdf">PDF</a> version).
 
 Table of Content
 
@@ -45,7 +45,7 @@ Table of Content
 
 ## Developer's Note
 
-Open [tutorial notebook](https://colab.research.google.com/github/data2code/afpdb/blob/main/tutorial/Developer.ipynb) in Google Colab. (<a href="tutorial/Developer.pdf">PDF</a> version).
+Open [Developer Notebook](https://colab.research.google.com/github/data2code/afpdb/blob/main/tutorial/Developer.ipynb) in Google Colab. (<a href="tutorial/Developer.pdf">PDF</a> version).
 
 ## Install
 ```
