@@ -4,7 +4,7 @@ The emergence of AlphaFold and subsequent protein AI models has revolutionized p
 
 ## Tutorial
 
-The tutorial book is availabe in <a href="tutorial/afpdb.pdf">PDF</a>.
+The tutorial book is availabe in <a href="tutorial/Afpdb_Tutorial.pdf">PDF</a>.
 
 The best way to learn and practice Afpdb, open [Tutorial Notebook](https://colab.research.google.com/github/data2code/afpdb/blob/main/tutorial/afpdb.ipynb) in Google Colab.
 
