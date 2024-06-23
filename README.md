@@ -1,15 +1,17 @@
 # Afpdb - An Efficient Protein Structure Manipulation Tool
 
-The emergence of AlphaFold and subsequent protein AI models has revolutionized protein design. To maximize the probability of success, the AI-driven protein design process involves analyzing thousands of protein structures. This includes handling structure file read/write operations, aligning structures and measuring structural deviations, standardizing chain/residue labels, extracting residues, identifying mutations, and creating visualizations. However, existing programming packages do not fully address these challenges. To bridge this gap, we introduce the afpdb module. Built upon AlphaFold’s numpy architecture and leveraging the intuitive contig syntax proposed by RFDiffusion, afpdb streamlines structure analyses. While supplementing BioPython with dozens of methods commonly used in protein AI design but not readily available elsewhere; it also offers a user-friendly interface that seamlessly integrates with PyMOL’s visualization capabilities.
+The emergence of AlphaFold and subsequent protein AI models has revolutionized protein design. To maximize the probability of success, the AI-driven protein design process involves analyzing thousands of protein structures. This includes handling structure file read/write operations, aligning structures and measuring structural deviations, standardizing chain/residue labels, extracting residues, identifying mutations, and creating visualizations. However, existing programming packages do not fully address these challenges. To bridge this gap, we introduce the Afpdb module. Built upon AlphaFold’s numpy architecture and leveraging the intuitive contig syntax proposed by RFDiffusion, afpdb streamlines structure analyses. While supplementing Biopython with dozens of methods commonly used in protein AI design but not readily available elsewhere; it also offers a user-friendly interface that seamlessly integrates with PyMOL’s visualization capabilities.
 
 ## Tutorial
 
-To learn and practice afpdb, open [Tutorial Notebook](https://colab.research.google.com/github/data2code/afpdb/blob/main/tutorial/afpdb.ipynb) in Google Colab. (<a href="tutorial/afpdb.pdf">PDF</a> version).
+The tutorial book is availabe in <a href="tutorial/afpdb.pdf">PDF</a>.
+
+The best way to learn and practice Afpdb, open [Tutorial Notebook](https://colab.research.google.com/github/data2code/afpdb/blob/main/tutorial/afpdb.ipynb) in Google Colab.
 
 Table of Content
 
 1. Demo
-2. Fundermental Concepts
+2. Fundamental Concepts
    - Internal Data Structure
    - Contig 
 3. Selection
@@ -20,6 +22,7 @@ Table of Content
 5. Sequence & Chain
 6. Geometry, Measurement, & Visualization
    - Select Neighboring Residues
+   - Display
    - B-factors
    - PyMOL Interface
    - RMSD
@@ -33,7 +36,7 @@ Table of Content
 
 ## AI Use Cases
 
-Interested in applying Afpdb to AI protein design? Open [AI Use Case Notebook](https://colab.research.google.com/github/data2code/afpdb/blob/main/tutorial/AI.ipynb) in Google Colab. (<a href="tutorial/AI.pdf">PDF</a> version).
+Interested in applying Afpdb to AI protein design? Open [AI Use Case Notebook](https://colab.research.google.com/github/data2code/afpdb/blob/main/tutorial/AI.ipynb) in Google Colab.
 
 Table of Content
 
@@ -45,7 +48,7 @@ Table of Content
 
 ## Developer's Note
 
-Open [Developer Notebook](https://colab.research.google.com/github/data2code/afpdb/blob/main/tutorial/Developer.ipynb) in Google Colab. (<a href="tutorial/Developer.pdf">PDF</a> version).
+Open [Developer Notebook](https://colab.research.google.com/github/data2code/afpdb/blob/main/tutorial/Developer.ipynb) in Google Colab.
 
 ## Install
 ```
