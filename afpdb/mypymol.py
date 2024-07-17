@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import pymol2
 import pymol.util as pyutil
-import os,ssl
+import os,ssl,sys
 from .afpdb import util
 os.environ["http_proxy"] = "http://nibr-proxy.global.nibr.novartis.net:2011"
 os.environ["https_proxy"] = os.environ["http_proxy"]

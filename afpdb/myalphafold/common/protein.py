@@ -346,7 +346,7 @@ def to_pdb(prot: Protein) -> str:
   pdb_lines.append(_chain_end(atom_index, res_1to3(aatype[-1]),
                               chain_ids[chain_index[-1]], residue_index[-1]))
   pdb_lines.append('ENDMDL')
-  pdb_lines.append('END')
+  pdb_lines.append('END   ')
 
   # Pad all lines to 80 characters.
   pdb_lines = [line.ljust(80) for line in pdb_lines]

@@ -10,6 +10,13 @@ try:
     _Mol3D_=True
 except:
     _Mol3D_=False
+try:
+    import pymol2
+    _PYMOL_=True
+except Exception as e:
+    print(e)
+    _PYMOL_=False
+
 from afpdb import util
 from scipy.stats import rankdata
 from Bio.PDB import MMCIFParser, PDBParser, MMCIF2Dict, PDBIO, Structure
@@ -20,6 +27,11 @@ import os,re,traceback,pathlib,requests
 def check_Mol3D():
     if not _Mol3D_:
         print("Requirement Py3DMol is not installed")
+        exit()
+
+def check_PyMOL():
+    if not _PYMOL_:
+        print("Requirement PyMOL is not installed")
         exit()
 
 def rot_a2b(a, b):
@@ -627,10 +639,16 @@ class Protein:
         self._set_data(afprt.Protein.from_biopython(structure, model=model, chains=chains))
         return self
 
-    def to_biopython(self):
+    def to_biopython(self, add_hydrogen=False):
         """convert the object to BioPython structure object"""
         tmp=tempfile.NamedTemporaryFile(dir="/tmp", delete=True, suffix=".pdb").name
         self.save(tmp)
+        # add hydrogen with PyMOL
+        if add_hydrogen:
+            check_PyMOL()
+            pm=self.PyMOL()
+            pm.run(f"load {tmp}, myobj; h_add myobj; save {tmp}")
+            pm.close()
         # Load the PDB structure
         parser = PDBParser()
         structure = parser.get_structure("mypdb", tmp)
@@ -659,14 +677,14 @@ class Protein:
         html=obj.show(p.to_pdb_str(), show_sidechains=show_sidechains, show_mainchains=show_mainchains, color=color, style=style, width=width, height=height)
         return IPython.display.publish_display_data({'application/3dmoljs_load.v0':html, 'text/html': html},metadata={})
 
-    def sasa(self, rs_chain=None):
+    def sasa(self, rs_chain=None, add_hydrogen=True):
         """in_chains is a contig that describe what to be used as the object
             Return:
                 SASA: solvent-accessible surface area
                 rSASA: relative SASA, see dsasa() method for definition
         """
         obj=self.extract(rs_chain)
-        structure=obj.to_biopython()
+        structure=obj.to_biopython(add_hydrogen=add_hydrogen)
         from Bio.PDB.SASA import ShrakeRupley
         sasa = ShrakeRupley()
         sasa.compute(structure, level="R")
@@ -693,7 +711,7 @@ class Protein:
         #t.display()
         return t
 
-    def dsasa(self, rs_chain_a, rs_chain_b):
+    def dsasa(self, rs_chain_a, rs_chain_b, add_hydrogen=True):
         """Classify residues based on SASA, according to:
             Levy ED, A Simple Definition of Structural Regions in Proteins and
             Its Use in Analyzing Interface Evolution
@@ -721,8 +739,8 @@ class Protein:
         rs_b=self.rs(rs_chain_b)
         if len(rs_a & rs_b)>0:
             raise Exception("Two selections cannot overlap.")
-        t_a=self.sasa(rs_a)
-        t_b=self.sasa(rs_b)
+        t_a=self.sasa(rs_a, add_hydrogen=add_hydrogen)
+        t_b=self.sasa(rs_b, add_hydrogen=add_hydrogen)
         # monomer
         t_m=pd.concat([t_a, t_b], ignore_index=True)
         t_m.rename2({'rSASA':'rSASAm', 'SASA':'SASAm'})
@@ -1359,6 +1377,19 @@ class Protein:
     def rs_missing(self):
         print("Please use rsi_missing() instead. The method returns an index array, instead of an RS object.")
         return self.rsi_missing()
+
+    def rs_next2missing(self):
+        """Return a selection for residues next to a gap"""
+        chains=self.data.chain_index
+        resi,code=self.split_residue_index(self.data.residue_index)
+        # where chain breaks
+        idx=np.where(chains[1:]!=chains[:-1])[0]+1
+        rs_i=[]
+        for i,k in enumerate(chains):
+            if i in idx: continue
+            if i>0 and resi[i]-resi[i-1]>1:
+                rs_i.extend([i-1,i])
+        return self.rs(rs_i)
 
     def rs_insertion(self, p_missing):
         """object p_missing contains missing residues, which were replaced by glycine in the self object

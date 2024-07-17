@@ -112,6 +112,8 @@ def test_missing():
     q=p.extract(~p.rs("H10-14"))
     rs_missing=p.rs_insertion(q)
     assert str(rs_missing)=="H10-14"
+    q=p.extract("H1-10,15-:L-20,25-")
+    assert str(q.rs_next2missing()) == "H10-15:L20-25"
 
 ### Sequence, missing residues, insertion code
 def test_inplace():
@@ -330,8 +332,9 @@ def test_sasa():
     t=p.sasa("H:L")
     t_ag=t[(t.chain=="L")][90:105]
     t_ag['DELTA_SASA']=t_ag['SASA'].values-t_all['SASA'].values
+    t_ag.display()
     x=t_ag.DELTA_SASA.values
-    assert np.all(x[1:4]>10), "SASA 1"
+    assert np.all(x[1:4]>8), "SASA 1"
     assert np.all(x[7:]<10), "SASA 2"
 
 ### DSSP
