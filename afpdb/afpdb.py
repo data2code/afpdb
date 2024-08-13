@@ -639,6 +639,16 @@ class Protein:
         self._set_data(afprt.Protein.from_biopython(structure, model=model, chains=chains))
         return self
 
+    @staticmethod
+    def fix_pymol_pdb(fn):
+        """Save PDB in PyMOL ends with 'END' instead of 'END   ', which then triggers a warning in BioPython get_structure()"""
+        S=util.read_list(fn)
+        for i in range(len(S)-1, 0, -1):
+            if S[i]=='END':
+                S[i]='END   '
+                break
+        util.save_list(fn, S, s_end="\n")
+
     def to_biopython(self, add_hydrogen=False):
         """convert the object to BioPython structure object"""
         tmp=tempfile.NamedTemporaryFile(dir="/tmp", delete=True, suffix=".pdb").name
@@ -649,6 +659,8 @@ class Protein:
             pm=self.PyMOL()
             pm.run(f"load {tmp}, myobj; h_add myobj; save {tmp}")
             pm.close()
+            Protein.fix_pymol_pdb(tmp)
+            util.unix(f"cp {tmp} tx.pdb")
         # Load the PDB structure
         parser = PDBParser()
         structure = parser.get_structure("mypdb", tmp)
@@ -2120,6 +2132,51 @@ class RS(RL):
                     return f"select {rs_name}, {s} and name {str(ats).replace(',', '+')}"
         else:
             return ":".join(out)
+
+    def contig_mpnn(self):
+        """output contig for the ProteinMPNN part of the ColabDesign, notice the contig format there
+        cannot handle insertion code, so if you have insertion code, renumber it first
+            q, old=p.renumber(renumber='NOCODE')
+
+        rs: residues that we do not redesign (fixed), MPNN only redesigns the remaining residues
+        """
+        mask=np.zeros_like(self.p.data.chain_index)
+        if not self.is_empty(): mask[self.data]=1
+        idx,code=self.p.split_residue_index(self.p.data.residue_index)
+        out=[]
+        c_pos=self.p.chain_pos()
+        #print(c_pos, mask, idx, code)
+        chains=self.p.chain_id()
+        for k in chains:
+            (b,e) = c_pos[k]
+            out2=[]
+            prev_m=-1
+            prev_idx=-99999
+            M=mask[b:e+1]
+            one=""
+            for m,i in zip(M, range(b,e+1)):
+                #print(">>>", i, m, idx[i], one, prev_m, prev_idx, e)
+                if i==b:
+                    one=(k if m>0 else "")+str(idx[i])
+                elif i==e or m!=prev_m or idx[i]-prev_idx>1:
+                    if prev_m>0:
+                        if i==e:
+                            out2.append(one+f"-{idx[i]}")
+                        else:
+                            out2.append(one+f"-{idx[i-1]}")
+                    else:
+                        if i==e:
+                            L=idx[i]-int(one)+1
+                        else:
+                            L=idx[i-1]-int(one)+1
+                        out2.append(f"{L}-{L}")
+                    one=(k if m>0 else "")+str(idx[i])
+                if i==e: break
+                prev_m=m
+                prev_idx=idx[i]
+                #print(out2, one)
+            out.append("/".join(out2))
+        return " ".join(out)
 
 if __name__=="__main__":
 

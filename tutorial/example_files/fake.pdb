@@ -49,4 +49,4 @@ ATOM    875  CG1 VAL H   4      25.686  12.319 -16.177  1.00  1.00           C
 ATOM    876  CG2 VAL H   4      27.466  10.902 -17.258  1.00  1.00           C  
 TER     877      VAL H   4
 ENDMDL
-END
+END   
