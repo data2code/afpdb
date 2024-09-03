@@ -188,7 +188,7 @@ def from_pdb_string(pdb_str: str, chain_id: Optional[str] = None) -> Protein:
       rn=MODRES.get(res.resname, res.resname)
       if rn!=res.resname:
         print(f"Warning: modified residue converted: {res.resname} to {rn} at {resn}!")
-      rn=residue_constants.restype_3to1.get(res.resname, 'X')
+      rn=residue_constants.restype_3to1.get(rn, 'X')
       if rn=='X': # skip unsupported residues
         print(f"Warning: unrecognized residue ignored: {res.resname} at {resn}!")
         continue
