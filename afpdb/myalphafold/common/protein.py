@@ -209,12 +209,6 @@ def from_pdb_string(pdb_str: str, chain_id: Optional[str] = None) -> Protein:
         continue
       #
 
-      chain_idx=c_chain_id.get(chain.id, -1)
-      if chain_idx==-1:
-        c_chain_id[chain.id]=chain_idx=len(c_chain_id)
-      L_res.append((chain_idx, int(res.id[1]), res.id[2].strip()))
-      chain_index.append(chain_idx)
-
       res_shortname = residue_constants.restype_3to1.get(res.resname, 'X')
       restype_idx = residue_constants.restype_order.get(
           res_shortname, residue_constants.restype_num)
@@ -230,6 +224,13 @@ def from_pdb_string(pdb_str: str, chain_id: Optional[str] = None) -> Protein:
       if np.sum(mask) < 0.5:
         # If no known atom positions are reported for the residue then skip it.
         continue
+
+      chain_idx=c_chain_id.get(chain.id, -1)
+      if chain_idx==-1:
+        c_chain_id[chain.id]=chain_idx=len(c_chain_id)
+      chain_index.append(chain_idx)
+      L_res.append((chain_idx, int(res.id[1]), res.id[2].strip()))
+
       aatype.append(restype_idx)
       atom_positions.append(pos)
       atom_mask.append(mask)
