@@ -76,7 +76,15 @@ class Protein:
       chain_index=np.copy(self.chain_index),
       b_factors=np.copy(self.b_factors))
     p.chain_id=np.copy(self.chain_id)
+    p.warning(self.warning())
     return p
+
+  def warning(self, data=None):
+    if data is not None:
+      self._warning=data.copy()
+    elif not hasattr(self, '_warning'):
+      self._warning={}
+    return self._warning
 
   @staticmethod
   def from_biopython(structure, model=None, chains=None):
@@ -139,6 +147,7 @@ class Protein:
         return p
     return from_pdb_string("MODEL     1\nENDMDL\nEND")
 
+
 def from_pdb_string(pdb_str: str, chain_id: Optional[str] = None) -> Protein:
   """Takes a PDB string and constructs a Protein object.
 
@@ -171,8 +180,12 @@ def from_pdb_string(pdb_str: str, chain_id: Optional[str] = None) -> Protein:
   b_factors = []
 
   ##YZ
-  insert_residues=[]
+  chain_index = []
+  warning={'renamed_res':[], 'insertion_res':[], 'unknown_res':[]}
+  c_chain_id={}
+  L_res=[]
   ##
+
   for chain in model:
     if chain_id is not None and chain.id != chain_id:
       continue
@@ -183,16 +196,25 @@ def from_pdb_string(pdb_str: str, chain_id: Optional[str] = None) -> Protein:
         #print("WARNING:"
         #    f'PDB contains an insertion code at chain {chain.id} and residue '
         #    f'index {res.id[1]}. These are not supported.')
-        insert_residues.append(resn)
+        warning['insertion_res'].append((resn, res.resname))
       # YZ, take care of Modified Residues
       rn=MODRES.get(res.resname, res.resname)
       if rn!=res.resname:
+        warning['renamed_res'].append((resn, res.resname))
         print(f"Warning: modified residue converted: {res.resname} to {rn} at {resn}!")
       rn=residue_constants.restype_3to1.get(rn, 'X')
       if rn=='X': # skip unsupported residues
+        warning['unknown_res'].append((resn, res.resname))
         print(f"Warning: unrecognized residue ignored: {res.resname} at {resn}!")
         continue
       #
+
+      chain_idx=c_chain_id.get(chain.id, -1)
+      if chain_idx==-1:
+        c_chain_id[chain.id]=chain_idx=len(c_chain_id)
+      L_res.append((chain_idx, int(res.id[1]), res.id[2].strip()))
+      chain_index.append(chain_idx)
+
       res_shortname = residue_constants.restype_3to1.get(res.resname, 'X')
       restype_idx = residue_constants.restype_order.get(
           res_shortname, residue_constants.restype_num)
@@ -215,33 +237,51 @@ def from_pdb_string(pdb_str: str, chain_id: Optional[str] = None) -> Protein:
       #residue_index.append(res.id[1])
       residue_index.append(str(res.id[1])+res.id[2].strip())
       ##end
-      chain_ids.append(chain.id)
       b_factors.append(res_b_factors)
-  if len(insert_residues):
-      print("Warning: residues with insertion code: "+", ".join(insert_residues))
 
   # Chain IDs are usually characters so map these to ints.
   #unique_chain_ids = np.unique(chain_ids)
   #YZ keep order
-  unique_chain_ids=[]
-  for x in chain_ids:
-    if x not in unique_chain_ids:
-      unique_chain_ids.append(x)
+  unique_chain_ids=[x[1] for x in sorted([(v,k) for k,v in c_chain_id.items()])]
+  #for x in chain_ids:
+  #  if x not in unique_chain_ids:
+  #    unique_chain_ids.append(x)
+  #
+  #chain_id_mapping = {cid: n for n, cid in enumerate(unique_chain_ids)}
+  #chain_index = np.array([chain_id_mapping[cid] for cid in chain_ids])
 
-  chain_id_mapping = {cid: n for n, cid in enumerate(unique_chain_ids)}
-  chain_index = np.array([chain_id_mapping[cid] for cid in chain_ids])
+  atom_positions=np.array(atom_positions)
+  atom_mask=np.array(atom_mask)
+  aatype=np.array(aatype)
+  #YZ: we force it to use 5 chars, as residue may be renamed inplace later
+  residue_index=np.array(residue_index, dtype=np.dtype("<U6"))
+  chain_index=np.array(chain_index)
+  b_factors=np.array(b_factors)
+
+  #YZ: 20240902, deal with PDB where residues are not following the sorted order
+  new_idx=np.array(sorted(range(len(L_res)), key=lambda x: L_res[x]))
+  if len(new_idx):
+    atom_positions=atom_positions[new_idx]
+    atom_mask=atom_mask[new_idx]
+    aatype=aatype[new_idx]
+    residue_index=residue_index[new_idx]
+    chain_index=chain_index[new_idx]
+    b_factors=b_factors[new_idx]
+
+  p=Protein(
+      atom_positions=atom_positions,
+      atom_mask=atom_mask,
+      aatype=aatype,
+      residue_index=residue_index,
+      chain_index=chain_index,
+      b_factors=b_factors)
 
   #YZ: inject the original chain id
-  p=Protein(
-      atom_positions=np.array(atom_positions),
-      atom_mask=np.array(atom_mask),
-      aatype=np.array(aatype),
-      #YZ: we force it to use 5 chars, as residue may be renamed inplace later
-      residue_index=np.array(residue_index, dtype=np.dtype("<U6")),
-      chain_index=chain_index,
-      b_factors=np.array(b_factors))
-
   p.chain_id=unique_chain_ids
+  p.warning(warning)
+  if sum([len(v) for k,v in warning.items()]):
+      print(f"Warning: {warning}")
+
   return p
 
 def _chain_end(atom_index, end_resname, chain_name, residue_index) -> str:
