@@ -1142,6 +1142,20 @@ class Protein:
         obj._make_res_map()
         return obj
 
+    def rename_reorder_chains(self, p, c_chains, inplace=False):
+        """Rename chain names, then reorder all chains in the same order as chains are arranged in object p.
+            Object must have all the chains p contains after renaming, extra chains will be removed.
+
+            At the end, object should share the same chain names as p and chains are in the exact same order.
+            This way, the RS objects of associated with the two projects maybe Boolean combined.
+
+            This is used to prepare input structures for dockQ scoring.
+        """
+        obj=self if inplace else self.clone()
+        obj.rename_chains(c_chains, inplace=True)
+        obj.extract(":".join(p.chain_id()), inplace=True)
+        return obj
+
     def seq(self, keep_gap=True, gap="X"):
         """Return sequence, chains are separated by :, gaps represented by character defined by "gap"
             gap: controls what char is used for gap, AlphaFold does nto take -, so we use X instead"""
@@ -1290,11 +1304,14 @@ class Protein:
         return (rsi_a, atsi_a, rsi_b, atsi_b, res_a, res_b)
 
 
-    def rs_around(self, rs, dist=5, ats=None, rs_within=None, drop_duplicates=False, kdtree_bucket_size=10):
+    def rs_around(self, rs, dist=5, ats=None, rs_within=None, drop_duplicates=False, kdtree_bucket_size=10, keep_atoms=False):
         """select all residues not in rs and have at least one atom that is within dist to rs
 
             If drop_duplicates is True, we keep only one seed residue for each neighbor found
             If drop_duplicates is False, we keep all seed residues for each neighbor, all interaction pairs are kept
+
+            By default, we only keep the nearest atom pair for each residue pair. If keep_atoms is True,
+            we keep all atom pairs in the returned dataframe. drop_duplicates is set to False if keep_atoms is True.
 
             return a table with 3 columns: rs_neighbor, rs_seed, distance, sorted by distance descend
         """
@@ -1363,9 +1380,10 @@ class Protein:
             'chain_b':rs_b.chain(), 'resi_b':rsi_b, 'resn_b':rs_b.name(), 'resn_i_b':rs_b.namei(), 'atom_b':atom_b,
             'dist':d})
         df=df.sort_values('dist')
-        df.drop_duplicates(['resi_a','resi_b'], inplace=True)
-        if drop_duplicates:
-            df.drop_duplicates('resi_b', inplace=True)
+        if not keep_atoms:
+            df.drop_duplicates(['resi_a','resi_b'], inplace=True)
+            if drop_duplicates:
+                df.drop_duplicates('resi_b', inplace=True)
         return (RS(self, rsi_b), RS(self, rsi_a), df)
 
     def rsi_missing(self):
@@ -1568,6 +1586,76 @@ class Protein:
         d=np.linalg.norm(res_a - res_b, axis=-1)
         n=d.shape[0]
         return np.sqrt(np.sum(d*d)/n)
+
+    def dockQ(p, q, rs_a, rs_b, capri_peptide=False):
+        """p is native, q is model
+           rs_a and rs_b specify the two interacting groups, e.g., rs_a='H:L' and rs_b='P'
+           capri_peptide is the same as https://github.com/bjornwallner/DockQ
+
+        Note: two proteins p and q must share the same chain names and in the same order!
+        """
+
+        if ":".join(p.chain_id())!=":".join(q.chain_id()):
+            return Exception("Please rename and order all chains, e.g., use q.rename_reorder_chains(p, {'A':'B', 'B':'A'})")
+
+        FNAT_THRESHOLD: float = 5.0
+        FNAT_THRESHOLD_PEPTIDE: float = 4.0
+        INTERFACE_THRESHOLD: float = 10.0
+        INTERFACE_THRESHOLD_PEPTIDE: float = 8.0
+        CLASH_THRESHOLD: float = 2.0
+
+        def f1(tp, fp, p): return 2* tp/(tp+fp+p)
+
+        rs_a=p.rs(rs_a)
+        rs_b=p.rs(rs_b)
+        fnat_threshold=FNAT_THRESHOLD_PEPTIDE if capri_peptide else FNAT_THRESHOLD
+        rs_nbr_a, rs_seed_b, t_a=p.rs_around(rs_a, rs_within=rs_b, dist=fnat_threshold)
+        rs_nbr_b, rs_seed_b, t_b=q.rs_around(rs_a, rs_within=rs_b, dist=fnat_threshold)
+        pair_a={ (r['resi_a'], r['resi_b']) for i,r in t_a.iterrows() }
+        pair_b={ (r['resi_a'], r['resi_b']) for i,r in t_b.iterrows() }
+        pair_ab=pair_a & pair_b
+        out={}
+        out['fnat']=len(pair_ab)/len(pair_a) if len(pair_a) else 0
+        out['fnonnat']=1-len(pair_ab)/len(pair_b) if len(pair_b) else 0
+        out['nat_correct']=len(pair_ab)
+        out['nat_total']=len(pair_a)
+        out['nonnat_count']=len(pair_b)-len(pair_ab)
+        out['model_total']=len(pair_b)
+        out['clashes']=sum(t_a.dist<CLASH_THRESHOLD)
+        out['len1']=len(rs_a)
+        out['len2']=len(rs_b)
+        out['F1']=f1(len(pair_ab), len(pair_b)-len(pair_ab), len(pair_a))
+
+        if len(rs_a)>len(rs_b):
+            out['class1']='receptor'
+            out['class2']='ligand'
+            q.align(p, rs_a, rs_a, ats="N,CA,C,O")
+            LRMSD=q.rmsd(p, rs_b, rs_b, ats="N,CA,C,O")
+        else:
+            out['class1']='ligand'
+            out['class2']='receptor'
+            q.align(p, rs_b, rs_b, ats="N,CA,C,O")
+            LRMSD=q.rmsd(p, rs_a, rs_a, ats="N,CA,C,O")
+        out['LRMSD']=LRMSD
+
+        int_threshold=INTERFACE_THRESHOLD_PEPTIDE if capri_peptide else INTERFACE_THRESHOLD
+
+        if capri_peptide:
+            rs_nbr, rs_seed, t=p.rs_around(rs_a, rs_within=rs_b, dist=int_threshold, ats="CA,CB", keep_atoms=True)
+            t['aa_a']=p.rl(t.resi_a).aa()
+            t['aa_b']=p.rl(t.resi_b).aa()
+            # remove CA entries for non-G residues
+            mask=((t.aa_a!='G')&(t.atom_a=='CA'))|((t.aa_b!='G')&(t.atom_b=='CA'))
+            t=t[~mask]
+            rs_int=p.rs(t.resi_a)|p.rs(t.resi_b)
+        else:
+            rs_nbr, rs_seed, t=p.rs_around(rs_a, rs_within=rs_b, dist=int_threshold)
+            rs_int=rs_nbr | rs_seed
+        iRMSD=q.rmsd(p, rs_int, rs_int, ats="N,CA,C,O", align=True)
+        out['iRMSD']=iRMSD
+        out['DockQ']=(out['fnat']+1/(1+(iRMSD/1.5)**2)+1/(1+(LRMSD/8.5)**2))/3
+        #print(out)
+        return out
 
     @staticmethod
     def merge(objs):

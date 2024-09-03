@@ -3,9 +3,6 @@ import pymol2
 import pymol.util as pyutil
 import os,ssl,sys
 from .afpdb import util
-os.environ["http_proxy"] = "http://nibr-proxy.global.nibr.novartis.net:2011"
-os.environ["https_proxy"] = os.environ["http_proxy"]
-os.environ["ftp_proxy"] = os.environ["http_proxy"]
 ssl._create_default_https_context = ssl._create_unverified_context
 
 class PyMOL:

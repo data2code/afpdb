@@ -18,7 +18,12 @@ MODRES = {'MSE':'MET','MLY':'LYS','FME':'MET','HYP':'PRO',
           'HY3':'PRO','LLP':'LYS','MGN':'GLN','MHS':'HIS',
           'TRQ':'TRP','B3Y':'TYR','PHI':'PHE','PTR':'TYR',
           'TYS':'TYR','IAS':'ASP','GPL':'LYS','KYN':'TRP',
-          'CSD':'CYS','SEC':'CYS'}
+          'CSD':'CYS','SEC':'CYS',
+          ## YZ: addition from MOE models
+          'HID':'HIS', # This refers to histidine with the proton on the delta nitrogen (Nδ).
+          'HIE':'HIS', # This refers to histidine with the proton on the epsilon nitrogen (Nε).
+          'HIP':'HIS', # This refers to histidine with both nitrogens (Nδ and Nε) protonated, giving it a +1 charge
+         }
 
 def pdb_to_string(pdb_file, chains=None, models=None):
   '''read pdb file and return as string'''

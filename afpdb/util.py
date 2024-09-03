@@ -90,6 +90,7 @@ def unix(exe, l_print=True, l_error=True, l_block=True, error_to_stdout=True, sl
     if l_block:
         ON_POSIX='posix' in sys.builtin_module_names
         p = subprocess.Popen(exe, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, bufsize=0, close_fds=ON_POSIX)
+        p_keep=p
     else:
         #see https://stackoverflow.com/questions/50573169/leave-a-process-running-after-closing-python
         if is_python3():
@@ -144,7 +145,7 @@ def unix(exe, l_print=True, l_error=True, l_block=True, error_to_stdout=True, sl
             if sum(done)>1: break
             time.sleep(sleep_time)
     except KeyboardInterrupt as e: # this will catch Ctrl-C
-        proc.kill()
+        p_keep.kill()
     return "".join(out[0])
 
 
