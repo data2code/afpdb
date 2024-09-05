@@ -2165,6 +2165,16 @@ class RL:
     def __add__(self, rl_b):
         return self.__or__(rl_b)
 
+    @staticmethod
+    def _or(*L_rl):
+        """or operation on a list of RL objects"""
+        if len(L_rl)==0: util.error_msg("At least one RL objective should be provided!")
+        if not isinstance(L_rl[0], RL): util.error_msg("The first objective must be an RL instance!")
+        p=L_rl[0].p
+        L_rl=[RL(p, x).data for x in L_rs]
+        out=np.concatenate(L_rl)
+        return RS(p, out)
+
     def cast(self, q):
         """Cast the selection to a selection of object q
             We convert the select to contig str, not via array indices, so that residue A10 remains residue A10
