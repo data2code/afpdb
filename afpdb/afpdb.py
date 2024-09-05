@@ -2171,8 +2171,7 @@ class RL:
         if len(L_rl)==0: util.error_msg("At least one RL objective should be provided!")
         if not isinstance(L_rl[0], RL): util.error_msg("The first objective must be an RL instance!")
         p=L_rl[0].p
-        L_rl=[RL(p, x).data for x in L_rs]
-        out=np.concatenate(L_rl)
+        out=np.concatenate([RL(p, x).data for x in L_rl])
         return RS(p, out)
 
     def cast(self, q):
