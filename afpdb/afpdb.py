@@ -2058,6 +2058,10 @@ class RL:
         """Return the integer part of the residue_index, type is int"""
         return [int(re.sub(r'\D+$', '', self.p.data.residue_index[x])) for x in self.data]
 
+    def insertion_code(self):
+        """Return the insertion code part of the residue_index, type is str"""
+        return [re.sub(r'^\d+', '', self.p.data.residue_index[x]) for x in self.data]
+
     def chain(self, rs=None):
         chains=self.p.chain_id()
         return [chains[self.p.data.chain_index[x]] for x in self.data]
@@ -2074,6 +2078,12 @@ class RL:
     def i(restype):
         if len(restype)==3: restype=afres.restype_3to1.get(restype.upper(), restype)
         return afres.restype_order.get(restype.upper(), -1)
+
+    def df(self):
+        """List all the residues"""
+        resi=self.data
+        t=pd.DataFrame({'resi':resi, 'chain':self.chain(), 'name':self.name(), 'namei':self.namei(), 'code':self.insertion_code() ,'aa':self.aa()})
+        return t
 
 class RS(RL):
 
@@ -2146,6 +2156,12 @@ class RS(RL):
         """In a but not in b"""
         rs_b=RS(self.p, rs_b)
         return RS(self.p, set(self.data)-set(rs_b.data))
+
+    def cast(self, q):
+        """Cast the selection to a selection of object q
+            We convert the select to contig str, not via array indices, so that residue A10 remains residue A10
+            regardless whether the A chain is in object q"""
+        return q.rs(str(self))
 
     def str(self, format="CONTIG", rs_name="rs", ats=None):
         return self.__str__(format, rs_name=rs_name, ats=ats)
