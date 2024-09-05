@@ -2258,13 +2258,16 @@ class RS(RL):
             regardless whether the A chain is in object q"""
         return q.rs(str(self))
 
-    def str(self, format="CONTIG", rs_name="rs", ats=None):
-        return self.__str__(format, rs_name=rs_name, ats=ats)
+    def str(self, format="CONTIG", rs_name="rs", ats=None, obj_name=""):
+        return self.__str__(format, rs_name=rs_name, ats=ats, obj_name=obj_name)
 
-    def __str__(self, format="CONTIG", rs_name="rs", ats=None):
+    def __str__(self, format="CONTIG", rs_name="rs", ats=None, obj_name=""):
         """format: CONTIG, PYMOL
             if PYMOL, rs_name define the name of the pymol selection, ats for optional atom selection
+            for PYMOL format, users can optionally specify residue name and structure object name,
+                those are names for PyMOL objects.
         """
+        print(rs_name, obj_name, "<<<<<<<<<<<<<<<<<")
         mask=np.zeros_like(self.p.data.chain_index)
         if self.is_empty(): return ""
         mask[self.data]=1
@@ -2323,12 +2326,15 @@ class RS(RL):
             if ats.is_empty(): raise Exception("ats is empty in __str__")
             s=" or ".join(out)
             if ats.is_full():
-                return f"select {rs_name}, {s}"
+                s_out=f"select {rs_name}, {s}"
             else:
                 if len(out)>1:
-                    return f"select {rs_name}, ({s}) and name {str(ats).replace(',', '+')}"
+                    s_out=f"select {rs_name}, ({s}) and name {str(ats).replace(',', '+')}"
                 else:
-                    return f"select {rs_name}, {s} and name {str(ats).replace(',', '+')}"
+                    s_out=f"select {rs_name}, {s} and name {str(ats).replace(',', '+')}"
+            if obj_name!='':
+                s_out+=f" and {obj_name}"
+            return s_out
         else:
             return ":".join(out)
 
