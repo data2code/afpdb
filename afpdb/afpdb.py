@@ -1868,6 +1868,52 @@ class Protein:
         p.split_chains(c_pos, inplace = True)
         return (p.extract(~p.rs(X_pos)))
 
+    @staticmethod
+    def find_aligned_positions(seq1, seq2, globalxx=True):
+        """
+        globalxx=True: Perform global alignment, otherwise, local alignment
+        """
+
+        from Bio import pairwise2
+
+        if globalxx:
+            alignments = pairwise2.align.globalxx(seq1, seq2)
+        else:
+            alignments = pairwise2.align.localxx(seq1, seq2)
+
+        # Get the best alignment
+        best_alignment = alignments[0]
+
+        # Extract aligned sequences
+        aligned_seq1, aligned_seq2 = best_alignment[0], best_alignment[1]
+
+        # Find positions of aligned residues in the original sequences
+        aligned_positions_seq1 = []
+        aligned_positions_seq2 = []
+        seq1_index = seq2_index = 0
+
+        #print(aligned_seq1)
+        #print(aligned_seq2)
+        for res1, res2 in zip(aligned_seq1, aligned_seq2):
+            if res1 != '-': seq1_index += 1
+            if res2 != '-': seq2_index += 1
+            if res1 == res2 and res1 != '-':
+                aligned_positions_seq1.append(seq1_index - 1)
+                aligned_positions_seq2.append(seq2_index - 1)
+
+        return (best_alignment, aligned_positions_seq1, aligned_positions_seq2)
+
+    def rl_align(self, obj_b, chain_a, chain_b, globalxx=True):
+        """Align chain_a and chain_b of two objects, return the aligned residue lists
+            This can be used to generate RL for alignment between two proteins where sequence are not identifcal
+        """
+        seq1=self.rs(chain_a).seq()
+        seq2=obj_b.rs(chain_b).seq()
+        _, pos1, pos2 = Protein.find_aligned_positions(seq1, seq2, globalxx=globalxx)
+        pos1=np.array(pos1)+self.chain_pos()[chain_a][0]
+        pos2=np.array(pos2)+obj_b.chain_pos()[chain_b][0]
+        return RL(self, pos1), RL(obj_b, pos2)
+
 class ATS:
 
     def __init__(self, ats=None):
@@ -2062,16 +2108,15 @@ class RL:
         """Return the insertion code part of the residue_index, type is str"""
         return [re.sub(r'^\d+', '', self.p.data.residue_index[x]) for x in self.data]
 
-    def chain(self, rs=None):
+    def chain(self):
         chains=self.p.chain_id()
         return [chains[self.p.data.chain_index[x]] for x in self.data]
 
-    def aa(self, rs=None):
+    def aa(self):
         aatype=self.p.data.aatype
-        rs = self.data if rs is None else rs
         return [afres.restypes_with_x[aatype[i]] for i in self.data]
 
-    def seq(self, rs=None):
+    def seq(self):
         return "".join(self.aa())
 
     @staticmethod
@@ -2084,6 +2129,47 @@ class RL:
         resi=self.data
         t=pd.DataFrame({'resi':resi, 'chain':self.chain(), 'name':self.name(), 'namei':self.namei(), 'code':self.insertion_code() ,'aa':self.aa()})
         return t
+
+    def __str__(self):
+        if len(self.data)==0: return ''
+
+        t=self.df()
+
+        c_len=self.p.len_dict()
+        def contig(b, e):
+            #Create contig for a continous segment within the same chain
+            chain=t.loc[b, 'chain']
+            if (e-b+1)==1: return f"{chain}{t.loc[b, 'name']}"
+            # full length
+            if (e-b+1)==c_len[chain]: return chain
+            return f"{chain}{t.loc[b, 'name']}-{t.loc[e, 'name']}"
+
+        out=[]
+        b=prev_resi=0
+        prev_chain=''
+        n=len(t)
+        for i,r in t.iterrows():
+            if i==0 or r['resi']!=prev_resi+1 or r['chain']!=prev_chain: # a new segment
+                if i>0: out.append(contig(b, i-1))
+                b=i
+                prev_chain=r['chain']
+            prev_resi=r['resi']
+        out.append(contig(b, n-1))
+
+        return ":".join(out)
+
+    def __or__(self, rl_b):
+        """or/add for two residue lists means we concatenate them"""
+        return RS(self.p, np.concatenate((self.data, rl_b.data)))
+
+    def __add__(self, rl_b):
+        return self.__or__(rl_b)
+
+    def cast(self, q):
+        """Cast the selection to a selection of object q
+            We convert the select to contig str, not via array indices, so that residue A10 remains residue A10
+            regardless whether the A chain is in object q"""
+        return q.rl(self.__str__())
 
 class RS(RL):
 
