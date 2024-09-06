@@ -1934,6 +1934,8 @@ class Protein:
             rl_a, rl_b=self._rl_align(obj_b, x, y)
             out_a.append(rl_a)
             out_b.append(rl_b)
+        for x in out_b:
+            print(">>>>>>>>>>", x)
         return RL._or(*out_a), RL._or(*out_b)
 
 
@@ -2201,7 +2203,7 @@ class RL:
         if not isinstance(L_rl[0], RL): util.error_msg("The first objective must be an RL instance!")
         p=L_rl[0].p
         out=np.concatenate([RL(p, x).data for x in L_rl])
-        return RS(p, out)
+        return RL(p, out)
 
     def cast(self, q):
         """Cast the selection to a selection of object q
@@ -2296,7 +2298,6 @@ class RS(RL):
             for PYMOL format, users can optionally specify residue name and structure object name,
                 those are names for PyMOL objects.
         """
-        print(rs_name, obj_name, "<<<<<<<<<<<<<<<<<")
         mask=np.zeros_like(self.p.data.chain_index)
         if self.is_empty():
             if format=="CONTIG": return ""
