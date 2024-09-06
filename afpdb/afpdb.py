@@ -1934,8 +1934,6 @@ class Protein:
             rl_a, rl_b=self._rl_align(obj_b, x, y)
             out_a.append(rl_a)
             out_b.append(rl_b)
-        for x in out_b:
-            print(">>>>>>>>>>", x)
         return RL._or(*out_a), RL._or(*out_b)
 
 
