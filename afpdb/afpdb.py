@@ -1903,9 +1903,10 @@ class Protein:
 
         return (best_alignment, aligned_positions_seq1, aligned_positions_seq2)
 
-    def rl_align(self, obj_b, chain_a, chain_b, globalxx=True):
+    def _rl_align(self, obj_b, chain_a, chain_b, globalxx=True):
         """Align chain_a and chain_b of two objects, return the aligned residue lists
             This can be used to generate RL for alignment between two proteins where sequence are not identifcal
+            This method is to be used by rl_align()
         """
         seq1=self.rs(chain_a).seq()
         seq2=obj_b.rs(chain_b).seq()
@@ -1913,6 +1914,28 @@ class Protein:
         pos1=np.array(pos1)+self.chain_pos()[chain_a][0]
         pos2=np.array(pos2)+obj_b.chain_pos()[chain_b][0]
         return RL(self, pos1), RL(obj_b, pos2)
+
+    def rl_align(self, obj_b, chains_a=None, chains_b=None, globalxx=True):
+        """Align two objects. Specific the list of chains to be aligned, so
+            chains_a and chains_b are two lists with corresponding chains in the same order
+            if set to None, we will find all common chain names and assume they are used.
+                chains_a=["A","B","C"] chains_b=["H","L","P"] will match A to H
+                In this case, if left as None, it's an error as there is no shared chain name
+            If leave as None, both should be None
+        """
+        if chains_a is None or chains_b is None:
+            chains_a=chains_b=[x for x in self.chain_id() if x in obj_b.chain_id() ]
+        else:
+            if type(chains_a) is str: chains_a=[chains_a]
+            if type(chains_b) is str: chains_b=[chains_b]
+        out_a=[]
+        out_b=[]
+        for x,y in zip(chains_a, chains_b):
+            rl_a, rl_b=self._rl_align(obj_b, x, y)
+            out_a.append(rl_a)
+            out_b.append(rl_b)
+        return RL._or(*out_a), RL._or(*out_b)
+
 
 class ATS:
 
@@ -2165,6 +2188,12 @@ class RL:
     def __add__(self, rl_b):
         return self.__or__(rl_b)
 
+    def __sub__(self, rl_b):
+        """In a but not in b"""
+        rs_b=RS(self.p, rl_b)
+        out=[x for x in self.data if x not in rs_b.data]
+        return RL(self.p, out)
+
     @staticmethod
     def _or(*L_rl):
         """or operation on a list of RL objects"""
@@ -2269,7 +2298,11 @@ class RS(RL):
         """
         print(rs_name, obj_name, "<<<<<<<<<<<<<<<<<")
         mask=np.zeros_like(self.p.data.chain_index)
-        if self.is_empty(): return ""
+        if self.is_empty():
+            if format=="CONTIG": return ""
+            # create an empty selection object
+            return f"select {rs_name}, none"
+
         mask[self.data]=1
         c_pos=self.p.chain_pos()
         out=[]
