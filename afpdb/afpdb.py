@@ -1875,6 +1875,7 @@ class Protein:
         """
 
         from Bio import pairwise2
+        from Bio.pairwise2 import format_alignment
 
         if globalxx:
             alignments = pairwise2.align.globalxx(seq1, seq2)
@@ -1901,7 +1902,7 @@ class Protein:
                 aligned_positions_seq1.append(seq1_index - 1)
                 aligned_positions_seq2.append(seq2_index - 1)
 
-        return (best_alignment, aligned_positions_seq1, aligned_positions_seq2)
+        return ((best_alignment, format_alignment(*best_alignment)), aligned_positions_seq1, aligned_positions_seq2)
 
     def _rl_align(self, obj_b, chain_a, chain_b, globalxx=True):
         """Align chain_a and chain_b of two objects, return the aligned residue lists
@@ -2183,7 +2184,7 @@ class RL:
 
     def __or__(self, rl_b):
         """or/add for two residue lists means we concatenate them"""
-        return RS(self.p, np.concatenate((self.data, rl_b.data)))
+        return RL(self.p, np.concatenate((self.data, rl_b.data)))
 
     def __add__(self, rl_b):
         return self.__or__(rl_b)
