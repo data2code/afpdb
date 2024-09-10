@@ -438,13 +438,15 @@ class Protein:
             data[c]["min_dist"]=out_min[idx]
         return data
 
-    def resn(self, new_resn=None):
+    def resn(self, new_resn=None, rl=None):
         old=self.data.residue_index.copy()
-        if new_resn is not None:
-            assert(len(new_resn)==len(self))
-            self.data.residue_index[:]=np.array(new_resn)
+        rl=self.rl(rl)
+        if new_resn is not None and len(rl):
+            assert(len(new_resn)==len(rl))
+            self.data.residue_index[rl.data]=np.array(new_resn)
             self._make_res_map()
-        return old
+            return old[rl.data]
+        return None
 
     def renumber(self, renumber=None, inplace=False):
         obj = self if inplace else self.clone()
