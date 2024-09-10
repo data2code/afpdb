@@ -2151,7 +2151,7 @@ class RL:
     def df(self):
         """List all the residues"""
         resi=self.data
-        t=pd.DataFrame({'resi':resi, 'chain':self.chain(), 'name':self.name(), 'namei':self.namei(), 'code':self.insertion_code() ,'aa':self.aa()})
+        t=pd.DataFrame({'resi':resi, 'chain':self.chain(), 'resn':self.name(), 'namei':self.namei(), 'code':self.insertion_code() ,'aa':self.aa(), 'unique_name':self.unique_name()})
         return t
 
     def __str__(self):
