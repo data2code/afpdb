@@ -2163,10 +2163,10 @@ class RL:
         def contig(b, e):
             #Create contig for a continous segment within the same chain
             chain=t.loc[b, 'chain']
-            if (e-b+1)==1: return f"{chain}{t.loc[b, 'name']}"
+            if (e-b+1)==1: return f"{chain}{t.loc[b, 'resn']}"
             # full length
             if (e-b+1)==c_len[chain]: return chain
-            return f"{chain}{t.loc[b, 'name']}-{t.loc[e, 'name']}"
+            return f"{chain}{t.loc[b, 'resn']}-{t.loc[e, 'resn']}"
 
         out=[]
         b=prev_resi=0
