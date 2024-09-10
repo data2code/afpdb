@@ -441,12 +441,15 @@ class Protein:
     def resn(self, new_resn=None, rl=None):
         old=self.data.residue_index.copy()
         rl=self.rl(rl)
-        if new_resn is not None and len(rl):
+        if new_resn is not None:
             assert(len(new_resn)==len(rl))
+            if len(rl)==0: return None
             self.data.residue_index[rl.data]=np.array(new_resn)
             self._make_res_map()
             return old[rl.data]
-        return None
+        else:
+            if len(rl)==0: return old[:0]
+            return old[rl.data]
 
     def renumber(self, renumber=None, inplace=False):
         obj = self if inplace else self.clone()
