@@ -1556,6 +1556,12 @@ class Protein:
         df=self.atom_dist(rs_a, rs_b, ats)
         return df.drop_duplicates(['resi_a','resi_b'])
 
+    def cb_dist(self, rs_a, rs_b):
+        """Return Cb distances between the two residue groups, uses Ca for Glycine"""
+        df=self.atom_dist(rs_a, rs_b, ats='CA,CB')
+        mask=((df.res_a!='G')&(df.atom_a=='CA'))|((df.res_b!='G')&(df.atom_b=='CA'))
+        return df[~mask].copy()
+
     def rs_dist_to_point(self, center, rs=None, ats=None):
         """Rank residues (within rs) according to their shortest distance to a point
             center: np.array(3) for XYZ
@@ -1874,18 +1880,20 @@ class Protein:
         return (p.extract(~p.rs(X_pos)))
 
     @staticmethod
-    def find_aligned_positions(seq1, seq2, globalxx=True):
+    def find_aligned_positions(seq1, seq2, is_global=True, match=2, xmatch=-1, gap_open=-0.5, gap_ext=-0.1):
         """
-        globalxx=True: Perform global alignment, otherwise, local alignment
+        is_global=True: Perform global alignment, otherwise, local alignment
         """
 
         from Bio import pairwise2
         from Bio.pairwise2 import format_alignment
 
-        if globalxx:
-            alignments = pairwise2.align.globalxx(seq1, seq2)
+        if is_global:
+            print("AAAAAAa")
+            alignments = pairwise2.align.globalms(seq1, seq2, match, xmatch, gap_open, gap_ext)
         else:
-            alignments = pairwise2.align.localxx(seq1, seq2)
+            print("BBBBBB")
+            alignments = pairwise2.align.localms(seq1, seq2, match, xmatch, gap_open, gap_ext)
 
         # Get the best alignment
         best_alignment = alignments[0]
@@ -1909,19 +1917,19 @@ class Protein:
 
         return ((best_alignment, format_alignment(*best_alignment)), aligned_positions_seq1, aligned_positions_seq2)
 
-    def _rl_align(self, obj_b, chain_a, chain_b, globalxx=True):
+    def _rl_align(self, obj_b, chain_a, chain_b, is_global=True, match=2, xmatch=-1, gap_open=-0.5, gap_ext=-0.1):
         """Align chain_a and chain_b of two objects, return the aligned residue lists
             This can be used to generate RL for alignment between two proteins where sequence are not identifcal
             This method is to be used by rl_align()
         """
         seq1=self.rs(chain_a).seq()
         seq2=obj_b.rs(chain_b).seq()
-        _, pos1, pos2 = Protein.find_aligned_positions(seq1, seq2, globalxx=globalxx)
+        _, pos1, pos2 = Protein.find_aligned_positions(seq1, seq2, is_global=is_global, match=match, xmatch=xmatch, gap_open=gap_open, gap_ext=gap_ext)
         pos1=np.array(pos1)+self.chain_pos()[chain_a][0]
         pos2=np.array(pos2)+obj_b.chain_pos()[chain_b][0]
         return RL(self, pos1), RL(obj_b, pos2)
 
-    def rl_align(self, obj_b, chains_a=None, chains_b=None, globalxx=True):
+    def rl_align(self, obj_b, chains_a=None, chains_b=None, is_global=True, match=2, xmatch=-1, gap_open=-0.5, gap_ext=-0.1):
         """Align two objects. Specific the list of chains to be aligned, so
             chains_a and chains_b are two lists with corresponding chains in the same order
             if set to None, we will find all common chain names and assume they are used.
@@ -1937,7 +1945,7 @@ class Protein:
         out_a=[]
         out_b=[]
         for x,y in zip(chains_a, chains_b):
-            rl_a, rl_b=self._rl_align(obj_b, x, y)
+            rl_a, rl_b=self._rl_align(obj_b, x, y, is_global=is_global, match=match, xmatch=xmatch, gap_open=gap_open, gap_ext=gap_ext)
             out_a.append(rl_a)
             out_b.append(rl_b)
         return RL._or(*out_a), RL._or(*out_b)
@@ -2091,8 +2099,8 @@ class RL:
             #print(">>>>>>>>>>>>>>>>", chain, s, c_pos)
             if (chain not in c_pos):
                 raise Exception(f"Chain {chain} not found!")
-            if chain!=prev_chain and chain in chain_seen:
-                print(f"WARNING> contig should keep the segments for the same chain together {s}, if possible!")
+            #if chain!=prev_chain and chain in chain_seen:
+            #    print(f"WARNING> contig should keep the segments for the same chain together {s}, if possible!")
             chain_seen.append(chain)
             prev_chain=chain
             for pair in s[1:].split(","):
