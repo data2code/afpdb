@@ -1889,10 +1889,8 @@ class Protein:
         from Bio.pairwise2 import format_alignment
 
         if is_global:
-            print("AAAAAAa")
             alignments = pairwise2.align.globalms(seq1, seq2, match, xmatch, gap_open, gap_ext)
         else:
-            print("BBBBBB")
             alignments = pairwise2.align.localms(seq1, seq2, match, xmatch, gap_open, gap_ext)
 
         # Get the best alignment
