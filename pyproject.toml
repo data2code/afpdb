@@ -1,0 +1,13 @@
+[project]
+name = "afpdb"
+dynamic = ["version", "authors", "description", "requires-python", "license", "classifiers", "dependencies"]
+readme = "README.md"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project.urls]
+homepage = "https://github.com/data2code/afpdb"
+documentation = "https://github.com/data2code/afpdb/tutorial"
+issues = "https://github.com/data2code/afpdb/issues"

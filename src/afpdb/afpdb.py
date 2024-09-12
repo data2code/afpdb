@@ -1598,6 +1598,7 @@ class Protein:
         n=d.shape[0]
         return np.sqrt(np.sum(d*d)/n)
 
+    @staticmethod
     def dockQ(p, q, rs_a, rs_b, capri_peptide=False):
         """p is native, q is model
            rs_a and rs_b specify the two interacting groups, e.g., rs_a='H:L' and rs_b='P'
@@ -1620,7 +1621,7 @@ class Protein:
         rs_a=p.rs(rs_a)
         rs_b=p.rs(rs_b)
         fnat_threshold=FNAT_THRESHOLD_PEPTIDE if capri_peptide else FNAT_THRESHOLD
-        rs_nbr_a, rs_seed_b, t_a=p.rs_around(rs_a, rs_within=rs_b, dist=fnat_threshold)
+        rs_nbr_a, rs_seed_a, t_a=p.rs_around(rs_a, rs_within=rs_b, dist=fnat_threshold)
         rs_nbr_b, rs_seed_b, t_b=q.rs_around(rs_a, rs_within=rs_b, dist=fnat_threshold)
         pair_a={ (r['resi_a'], r['resi_b']) for i,r in t_a.iterrows() }
         pair_b={ (r['resi_a'], r['resi_b']) for i,r in t_b.iterrows() }

@@ -151,5 +151,5 @@ p.save("binders.pdb")
 p.show(show_sidechains=True)
 ```
 Output (It will be 3D interactive within Jupyter Notebook)<br>
-<img src="tutorial/img/demo.png">
+<img src="https://github.com/data2code/afpdb/blob/main/tutorial/img/demo.png?raw=true">
 

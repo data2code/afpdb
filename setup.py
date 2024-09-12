@@ -1,15 +1,17 @@
-from setuptools import setup
-from setuptools import find_packages
+from setuptools import setup, find_packages
 
 setup(
     name='afpdb',
     version='0.2.0',
-    description='A numpy-based PDB structure manipulation package',
+    description='A Numpy-based PDB structure manipulation package',
     url='https://github.com/data2code/afpdb',
     author='Yingyao Zhou',
     author_email='yingyao.zhou@novartis.com',
-    license='Apache-2.0',
+    license= 'MIT',
+    python_requires=">=3.7",
     zip_safe=False,
+    package_dir={'': 'src'},
+    #packages=find_packages(where='src'),
     packages=["afpdb","afpdb.mycolabfold","afpdb.myalphafold","afpdb.myalphafold.common","afpdb.mycolabdesign"],
     install_requires=['pandas',
                       'numpy',
@@ -22,9 +24,9 @@ setup(
                       ],
 
     classifiers=[
-        'Development Status :: 4 - Beta',
+        'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Science/Research',
-        'License :: OSI Approved :: Apache Software License',
+        'License :: OSI Approved :: MIT License',
         'Operating System :: POSIX :: Linux',
         'Programming Language :: Python :: 3.7',
     ],
