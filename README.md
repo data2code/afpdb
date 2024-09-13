@@ -67,9 +67,11 @@ or
 ```
 conda install bioconda::afp
 ```
+Development version:
+```
 pip install git+https://github.com/data2code/afpdb.git
 ```
-Development version:
+or
 ```
 git clone https://github.com/data2code/afpdb.git
 cd afpdb
