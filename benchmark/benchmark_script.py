@@ -1,25 +1,20 @@
 #!/usr/bin/env python
-import sys
-sys.path.insert(0, '/da/NBC/ds/zhoyyi1/score/')
-#sys.path.insert(0, '/da/NBC/ds/zhoyyi1/afpdb/')
-import glob, util, re, parmap, os, shutil, random, re
+import glob, re, os, random
 import numpy as np, pandas as pd
 from afpdb.afpdb import Protein
-from protein.mypdb import MySeq, MyColabFold as CF
-from afdb import AFDB
-from protein.abseq import Ab
-
+from afpdb import util
 from Bio.PDB import PDBParser, Selection, Superimposer, NeighborSearch
 from Bio.PDB.Polypeptide import three_to_one
-import tempfile
 from numpy.testing import assert_array_equal
-import time
-import warnings
-import traceback
+import time,warnings,traceback,json
+from maps import map
 warnings.filterwarnings("ignore")
 
-ABDB_NR = "/da/NBC/ds/zhoyyi1/abdb/NR_LH_Protein_Chothia"
-db = AFDB()
+# the server has 64 cores, no other job is running
+# we use 50 cores
+# you should adjust your cores, so that processes do not compete for CPUs
+# you can specify n_CPU=0, which will use (#cores - 2) on your system
+n_CPU=50
 # number of repeats in each use case
 N1=20
 N2=100
@@ -28,40 +23,16 @@ N4=500
 #N1=N2=N3=N4=5
 
 def cost(X):
-    fd_af, exp_pdb, md5 = X
+    # these does not seem to be enough to make the result exact the same each time
+    random.seed(42)
+    np.random.seed(42)
+
+    af_pdb, exp_pdb, cdr_h, cdr_l = X
     m = re.search(r"(?P<pdb>\w+).pdb$", exp_pdb)
     pdb_code=m.group('pdb')
 
-    # obtain the AF-predicted structure as p1
-    s_pdb = CF.get_pdb(fd_af)
-    p1 = Protein(s_pdb)
-    chains = p1.chain_id()
-    p1.rename_chains({"A": "H", "B": "L", "C": "G"}, inplace=True)
-    # obtain experimental structure as p0
+    p1 = Protein(af_pdb)
     p0 = Protein(exp_pdb)
-    ag = [x for x in p0.chain_id() if x not in ("H", "L")][0]
-    p0.rename_chains({ag: "G"}, inplace=True)
-    # both p0 and p1 will have chain named H, L (Antibody), and G (Antigen)
-
-    p1 = p1.extract("H:L:G", as_rl=True)
-    p0 = p0.extract("H:L:G", as_rl=True)
-    s1 = p1.seq().replace(":", "")
-    s0 = p0.seq().replace(":", "")
-
-    # AlphaFold model had missing residues replaced as G
-    rs_G = p1.rs(p0.rsi_missing())
-    if len(rs_G):  # we need to exclude X -> G residues from p1
-        rs = p1.rs_not(rs_G)
-        p1 = p1.extract(rs)
-        s1 = p1.seq().replace(":", "")
-
-    if len(p0) != len(p1) or s0 != s1:
-        print("ERROR> ", fd_af, p0.seq(), "\n", p1.seq(), len(p0), len(p1))
-        exit()
-
-    p0.renumber('NOCODE', inplace=True)
-    p1.renumber('NOCODE', inplace=True)
-
     # p0: experimental structure
     # p1: AF predicted structure
 
@@ -147,6 +118,7 @@ def cost(X):
         # afpdb implementation:
 
         dur_align_afpdb=0
+        rs_binder, rs_seed, t_dist = p0.rs_around("G", dist=5)
         for i in range(N2):
             # use a new object each time
             pp0=p0.clone()
@@ -162,7 +134,7 @@ def cost(X):
         # biopython implementation:
 
         # prepare input
-        res_on_non_chain_id_chain_exp, _, _ = get_interface_res(p0.to_biopython(), "G", 5)
+        res_on_non_chain_id_chain_exp, _, _ = get_interface_res_search_only(p0.to_biopython(), "G", 5)
 
         dur_align_bio= 0
         for i in range(N2):
@@ -185,10 +157,10 @@ def cost(X):
 
         p_biopython=pp1 # p_biopython is the already aligned version of p1 using afpdb
 
-        # check the euclidean distance b/t the two rotation matrix and translation vector
-        print(
-            f"the L2 between afpdb rotation matrix and biopython is {np.linalg.norm(R - super_imposer.rotran[0])}, the L2 distance b/t afpdb translation vector and biopython is {np.linalg.norm(t - super_imposer.rotran[1])}"
-        )
+        ## check the euclidean distance b/t the two rotation matrix and translation vector
+        #print(
+        #    f"the L2 between afpdb rotation matrix and biopython is {np.linalg.norm(R - super_imposer.rotran[0])}, the L2 distance b/t afpdb translation vector and biopython is {np.linalg.norm(t - super_imposer.rotran[1])}"
+        #)
 
         rmsd_diff = p_afpdb.rmsd(p0, rs_binder, rs_binder, ats="N,CA,C,O") - Protein(p_biopython).rmsd(p0, rs_binder, rs_binder, ats="N,CA,C,O")
         if rmsd_diff > 0.3:
@@ -239,11 +211,6 @@ def cost(X):
         #########################
 
         # create a b_factor array to flag CDRs
-        seq = p0.seq_dict()
-        ab = Ab(seq["H"], chain="H")
-        cdr_h, _, _ = ab.combine_cdr()
-        ab = Ab(seq["L"], chain="L")
-        cdr_l, _, _ = ab.combine_cdr()
         c_pos = p0.chain_pos()
         b_factor = np.zeros(len(p0))
         if cdr_h is not None:
@@ -495,45 +462,24 @@ def get_res_level_b_factor(structure):
         assigned_b_factor.extend([res['CA'].get_bfactor() for res in chain])
     return np.array(assigned_b_factor)
 
-def has_backbone(exp_pdb):
-    p0=Protein(exp_pdb)
-    return len(p0.rs_missing_atoms(ats="N,CA,C,O"))==0
-
-def counts(exp_pdb):
-    p0=Protein(exp_pdb)
-    return len(p0), len(p0.chain_id())
-
 if __name__ == "__main__":
-    if os.path.exists('benchmark.csv'):
-        t=pd.read_csv('benchmark.csv')
-    else:
-        t = pd.read_csv("../RUN.NR/tasks.csv")  # [:20]
-        # AF failed to predict these entries (coordinates are np.nan)
-        failed_af = ["430c5a7be3100c8caff702a7eaa43780", "1e606ec24022f31ae17dc1313af88faa"]
-        t=t[~t.md5.isin(failed_af)].copy()
-        # remove entries where backbone atoms are missing
-        tasks=[ ABDB_NR + "/" + r["pdb"] + ".pdb" for i,r in t.iterrows()]
-        mask=parmap.map(has_backbone, tasks)
-        t=t[mask]
-        t.to_csv('benchmark.csv', index=False)
+    import multiprocessing
 
-    # statistics for paper
-    if False:
-        tasks=[ ABDB_NR + "/" + r["pdb"] + ".pdb" for i,r in t.iterrows()]
-        out=parmap.map(counts, tasks)
-        print(np.mean([x[0] for x in out]))
-        print(np.mean([x[1] for x in out]))
-        exit()
+    if not os.path.exists('AFDB') or not os.path.exists('AbDb'):
+        util.unix('tar xvfz pdb.tar.gz')
 
+    if n_CPU > multiprocessing.cpu_count()-2: n_CPU=0
+
+    t=pd.read_csv('benchmark.csv')
     tasks = []
     for i, r in t.iterrows():
-        fd_af = "/da/NBC/ds/zhoyyi1/score/"+AFDB.FOLDER + "/" + r["md5"]
-        exp_pdb = ABDB_NR + "/" + r["pdb"] + ".pdb"
-        tasks.append([fd_af, exp_pdb, r["md5"]])
+        s_pdb=r['pdb']+".pdb"
+        cdr_h=json.loads(r['cdr_h'])
+        cdr_l=json.loads(r['cdr_l'])
+        tasks.append([f"AFDB/{s_pdb}", f"AbDb/{s_pdb}", cdr_h, cdr_l])
 
-    # the server has 64 cores, no other job is running
-    # we use 50 cores
-    out = parmap.map(cost, tasks, n_CPU=50)
+    #tasks=tasks[:1]
+    out = map(cost, tasks, n_CPU=n_CPU)
 
     tmp = pd.DataFrame(out)
     print(f"there are {sum(tmp.isna().any(axis =1))} entries that failed")
