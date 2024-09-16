@@ -65,7 +65,7 @@ pip install afpdb
 ```
 or
 ```
-conda install bioconda::afp
+conda install bioconda::afpdb
 ```
 Development version:
 ```
