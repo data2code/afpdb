@@ -91,6 +91,8 @@ class Protein:
     """convert an BioPython structure object to Protein object"""
     # code taken from Bio/PDB/PDBIO.py
     # avoid converting to PDB to support huge strutures
+
+    c_warning={'renamed_res':[], 'insertion_res':[], 'unknown_res':[]}
     for m in structure.get_list():
         #  atom_positions: np.ndarray  # [num_res, num_atom_type, 3]
         #  aatype: np.ndarray  # [num_res]
@@ -110,12 +112,30 @@ class Protein:
             chain_id=chain.id
             for residue in chain.get_unpacked_list():
                 hetfield, resseq, icode = residue.id
+                if hetfield!=" ": continue
                 resname = residue.resname
                 segid = residue.segid
                 resid = str(residue.id[1])+residue.id[2].strip()
+                resn=f"{chain_id}{resid}"
+
+                rn=MODRES.get(resname, resname)
+                # YZ, take care of Modified Residues
+                if rn!=resname:
+                    c_warning['renamed_res'].append((resn, resname))
+                    print(f"Warning: modified residue converted: {resname} to {rn} at {resn}!")
+                res_shortname = residue_constants.restype_3to1.get(resname, 'X')
+
+                if res_shortname=='X':
+                    c_warning['unknown_res'].append((f"{chain_id}{resid}", resname))
+                    continue
+                if residue.id[2].strip() != '':
+                    c_warning['insertion_res'].append((resn, resname))
+
                 residue_index.append(resid)
                 chain_ids.append(chain_id)
-                aatype.append(residue_constants.restype_order_with_x.get(residue_constants.restype_3to1.get(resname)))
+                restype_idx = residue_constants.restype_order.get(res_shortname, residue_constants.restype_num)
+                aatype.append(restype_idx)
+
                 atom_pos=np.zeros([residue_constants.atom_type_num,3])
                 atom_msk=np.zeros(residue_constants.atom_type_num)
                 b_fact=np.zeros(residue_constants.atom_type_num)
@@ -130,6 +150,7 @@ class Protein:
                 atom_positions.append(atom_pos)
                 atom_mask.append(atom_msk)
                 b_factors.append(b_fact)
+
         unique_chain_ids=[]
         for x in chain_ids:
             if x not in unique_chain_ids:
@@ -144,6 +165,9 @@ class Protein:
           chain_index=chain_index,
           b_factors=np.array(b_factors))
         p.chain_id=unique_chain_ids
+        p.warning(c_warning)
+        if sum([len(v) for k,v in c_warning.items()]):
+            print(f"Warning: {c_warning}")
         return p
     return from_pdb_string("MODEL     1\nENDMDL\nEND")
 
@@ -191,12 +215,6 @@ def from_pdb_string(pdb_str: str, chain_id: Optional[str] = None) -> Protein:
       continue
     for res in chain:
       resn=chain.id+str(res.id[1])+res.id[2].strip()
-      if res.id[2] != ' ':
-        #raise ValueError(
-        #print("WARNING:"
-        #    f'PDB contains an insertion code at chain {chain.id} and residue '
-        #    f'index {res.id[1]}. These are not supported.')
-        warning['insertion_res'].append((resn, res.resname))
       # YZ, take care of Modified Residues
       rn=MODRES.get(res.resname, res.resname)
       if rn!=res.resname:
@@ -208,6 +226,12 @@ def from_pdb_string(pdb_str: str, chain_id: Optional[str] = None) -> Protein:
         print(f"Warning: unrecognized residue ignored: {res.resname} at {resn}!")
         continue
       #
+      if res.id[2] != ' ':
+        #raise ValueError(
+        #print("WARNING:"
+        #    f'PDB contains an insertion code at chain {chain.id} and residue '
+        #    f'index {res.id[1]}. These are not supported.')
+        warning['insertion_res'].append((resn, res.resname))
 
       res_shortname = residue_constants.restype_3to1.get(res.resname, 'X')
       restype_idx = residue_constants.restype_order.get(

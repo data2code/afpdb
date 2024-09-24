@@ -137,14 +137,16 @@ class Protein:
 
     RENUMBER={'NONE':None, 'RESTART':'RESTART', 'CONTINUE':'CONTINUE', 'GAP200':'GAP200', 'NOCODE':'NOCODE'}
 
-    def __init__(self, pdb_str=None, contig=None):
-        """pdb_str can also be a file name ends with .pdb (or .ent)/.cif, but chain_id will be ignored in that case"""
+    def __init__(self, pdb_str=None, contig=None, assembly1=False):
+        """pdb_str can also be a file name ends with .pdb (or .ent)/.cif, but chain_id will be ignored in that case
+            To read the biological assembly of 7epp, use assembly1=True
+        """
         # contains two data members
         # self.data # AlphaFold Protein instance
-        self._set_data(pdb_str, contig)
+        self._set_data(pdb_str, contig, assembly1=assembly1)
         self.chain_id() # make sure we have self.data.chain_id
 
-    def _set_data(self, data, contig=None):
+    def _set_data(self, data, contig=None, assembly1=False):
         cls=type(data)
         if data is None or ((type(data) is str) and data ==''):
             data="MODEL     1\nENDMDL\nEND"
@@ -158,7 +160,7 @@ class Protein:
                 elif ext.endswith(".cif"):
                     self.from_cif(data)
                 else: # we assume it's a pdb code, we fetch
-                    self.fetch_pdb(data)
+                    self.fetch_pdb(data, assembly1=assembly1)
             else:
                 self.data=afprt.from_pdb_string(data)
         # in jupyter, isinstance is not always work, probably due to auto reload
@@ -597,8 +599,8 @@ class Protein:
         obj._make_res_map()
         return obj
 
-    def fetch_pdb(self, code, remove_file=True):
-        fn=cldpdb.get_pdb(code)
+    def fetch_pdb(self, code, remove_file=True, assembly1=False):
+        fn=cldpdb.get_pdb(code, assembly1=assembly1)
         if fn is None: return fn
         if fn.lower().endswith(".cif"):
             self.from_cif(fn)
@@ -634,6 +636,10 @@ class Protein:
 
     def from_cif(self, fn, model=None, chains=None):
         parser = MMCIFParser()
+        from Bio.PDB.PDBExceptions import PDBConstructionWarning
+        import warnings
+        # Suppress the PDBConstructionWarning
+        warnings.simplefilter('ignore', PDBConstructionWarning)
         structure=parser.get_structure("", str(fn))
         return self.from_biopython(structure, model=model, chains=chains)
 
