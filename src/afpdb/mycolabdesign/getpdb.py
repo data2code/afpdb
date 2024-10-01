@@ -5,7 +5,8 @@ def get_pdb(pdb_code=None, assembly1=False):
   if os.path.isfile(pdb_code):
     return pdb_code
   elif len(pdb_code) == 4:
-    fn=f"{pdb_code}.pdb1" if not assembly1 else f"{pdb_code}-assembly1.cif"
+    #fn=f"{pdb_code}.pdb1" if not assembly1 else f"{pdb_code}-assembly1.cif"
+    fn=f"{pdb_code}.cif" if not assembly1 else f"{pdb_code}-assembly1.cif"
     if not os.path.isfile(fn):
       cmd=f"wget -nc --no-check-certificate https://files.rcsb.org/download/{fn}.gz && gunzip {fn}.gz"
       os.system(cmd)
