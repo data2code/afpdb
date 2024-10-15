@@ -137,14 +137,16 @@ class Protein:
 
     RENUMBER={'NONE':None, 'RESTART':'RESTART', 'CONTINUE':'CONTINUE', 'GAP200':'GAP200', 'NOCODE':'NOCODE'}
 
-    def __init__(self, pdb_str=None, contig=None):
-        """pdb_str can also be a file name ends with .pdb (or .ent)/.cif, but chain_id will be ignored in that case"""
+    def __init__(self, pdb_str=None, contig=None, assembly1=False):
+        """pdb_str can also be a file name ends with .pdb (or .ent)/.cif, but chain_id will be ignored in that case
+            To read the biological assembly of 7epp, use assembly1=True
+        """
         # contains two data members
         # self.data # AlphaFold Protein instance
-        self._set_data(pdb_str, contig)
+        self._set_data(pdb_str, contig, assembly1=assembly1)
         self.chain_id() # make sure we have self.data.chain_id
 
-    def _set_data(self, data, contig=None):
+    def _set_data(self, data, contig=None, assembly1=False):
         cls=type(data)
         if data is None or ((type(data) is str) and data ==''):
             data="MODEL     1\nENDMDL\nEND"
@@ -152,13 +154,14 @@ class Protein:
             data=str(data)
         if type(data) is str:
             if "\n" not in data:
-                ext=data.lower()[-4:]
-                if ext.endswith(".pdb") or ext.endswith(".ent"): # pdb file name
-                    self.from_pdb(data)
-                elif ext.endswith(".cif"):
-                    self.from_cif(data)
+                if os.path.exists(data):
+                    fmt=Protein.guess_format(data)
+                    if fmt in ('pdb',''):
+                        self.from_pdb(data)
+                    else:
+                        self.from_cif(data)
                 else: # we assume it's a pdb code, we fetch
-                    self.fetch_pdb(data)
+                    self.fetch_pdb(data, assembly1=assembly1)
             else:
                 self.data=afprt.from_pdb_string(data)
         # in jupyter, isinstance is not always work, probably due to auto reload
@@ -597,8 +600,8 @@ class Protein:
         obj._make_res_map()
         return obj
 
-    def fetch_pdb(self, code, remove_file=True):
-        fn=cldpdb.get_pdb(code)
+    def fetch_pdb(self, code, remove_file=True, assembly1=False):
+        fn=cldpdb.get_pdb(code, assembly1=assembly1)
         if fn is None: return fn
         if fn.lower().endswith(".cif"):
             self.from_cif(fn)
@@ -624,17 +627,45 @@ class Protein:
         else:
             return Protein().from_pdb(fn)
 
-    def from_pdb(self, fn, chains=None, models=None):
-        self._set_data(cldprt.pdb_to_string(str(fn), chains, models))
-        return self
+    @staticmethod
+    def guess_format(fn):
+        """Guess if a file is PDB or CIF"""
+        ext=os.path.splitext(fn)[1]
+        if ext in ('.gz'):
+            ext=os.path.splitext(fn[:-3])[1]
+        if ext in ('.pdb','.pdb1'): return "pdb"
+        if ext in ('.cif'): return "cif"
+        S=util.read_list(fn)
+        pat_loop=re.compile(r'^(loop_|data_|_atom)')
+        pat_key=re.compile(r'^(HEADER|TITLE|KEYWDS|REMARK|MODEL|END) ')
+        for s in S:
+            if pat_key.search(s): return 'pdb'
+            if pat_loop.search(s): return "cif"
+        return ""
+
+    def from_pdb(self, fn, chains=None, model=None):
+        #self._set_data(cldprt.pdb_to_string(str(fn), chains, models))
+        structure=afprt.pdb2structure(str(fn))
+        return self.from_biopython(structure, model=model, chains=chains)
 
     def to_pdb_str(self):
         data_str=afprt.to_pdb(self.data)
         return data_str
 
     def from_cif(self, fn, model=None, chains=None):
-        parser = MMCIFParser()
-        structure=parser.get_structure("", str(fn))
+        parser = MMCIFParser(QUIET=True)
+        from Bio.PDB.PDBExceptions import PDBConstructionWarning
+        import warnings
+        # Suppress the PDBConstructionWarning
+        warnings.simplefilter('ignore', PDBConstructionWarning)
+        fn=str(fn)
+        ext=os.path.splitext(fn)[1]
+        if ext in ('.gz'):
+            import gzip
+            with gzip.open(fn, 'rt') as f:
+                structure=parser.get_structure("none", f)
+        else:
+            structure=parser.get_structure("", fn)
         return self.from_biopython(structure, model=model, chains=chains)
 
     def from_biopython(self, structure, model=None, chains=None):
@@ -667,7 +698,7 @@ class Protein:
             Protein.fix_pymol_pdb(tmp)
             util.unix(f"cp {tmp} tx.pdb")
         # Load the PDB structure
-        parser = PDBParser()
+        parser = PDBParser(QUIET=True)
         structure = parser.get_structure("mypdb", tmp)
         os.remove(tmp)
         return structure
@@ -1089,7 +1120,7 @@ class Protein:
                         aa=[k, fp&v, fp-v, v-fp]
             for i in range(1,4):
                 aa[i]=sorted([afres.atom_types[x] for x in aa[i]])
-            print("Cloest match: (shared, input, expect)", aa, score)
+            print("Closest match: (shared, input, expect)", aa, score)
             raise ValueError(f'Invalid aatypes at position: {pos}')
 
         if aatype is None:
@@ -1606,6 +1637,8 @@ class Protein:
 
         Note: two proteins p and q must share the same chain names and in the same order!
         """
+
+        q=q.clone() # we make a clone, so that when q is aligned, we don't change the original q object
 
         if ":".join(p.chain_id())!=":".join(q.chain_id()):
             return Exception("Please rename and order all chains, e.g., use q.rename_reorder_chains(p, {'A':'B', 'B':'A'})")
