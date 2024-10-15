@@ -51,7 +51,7 @@ class ThreadSeq:
         # these residues need to be mutated regardless
         self.miss_res=self.p.rs_missing_atoms()
 
-    def run(self, out_file, seq, replace_X_with='A', relax=0, seq2bfactor=False, amber_gpu=False, cores=1, side_chain_pdb=None, chain_map=None):
+    def run(self, out_file, seq, replace_X_with='A', relax=0, seq2bfactor=False, amber_gpu=False, cores=1, side_chain_pdb=None, rl_from=None, rl_to=None):
         """replace_X_with, if there is unrecognized residue in seq, use A or G,
             A is preferred. If the original PDB has CB, G might fail (have not verified)
             otherwise, give an error
@@ -91,13 +91,9 @@ class ThreadSeq:
         #print(self.miss_res)
 
         if side_chain_pdb is not None: # we need to copy side chains first
-            if chain_map is None:
-                chain_map={}
-            elif type(chain_map) is str:
-                chain_map=json.loads(chain_map)
             tmp=tempfile.NamedTemporaryFile(delete=False, prefix="_THREAD", suffix=".pdb")
             shutil.copyfile(self.pdb, tmp.name)
-            self.p=Protein.copy_side_chain(tmp.name, side_chain_pdb, chain_map=chain_map, c_seq=seq)
+            self.p=Protein.copy_side_chain(tmp.name, side_chain_pdb, rl_from=rl_from, rl_to=rl_to)
             if self.p is None:
                 print(f"ERROR ThreadSeq> Fail to copy side chains: {out_file}, not found!")
                 return {"ok":False}
@@ -132,7 +128,10 @@ class ThreadSeq:
         # extra steps
         if seq2bfactor:
             try:
-                self.add_b_factor(out_file, seq)
+                if side_chain_pdb is not None and rl_from is not None and rl_to is not None:
+                    self.add_b_factor_rl(out_file, rl_to)
+                else:
+                    self.add_b_factor(out_file, rl_to, seq)
             except Exception as e:
                 print(traceback.format_exc())
                 print("Skip b factor!!!!!")
@@ -256,6 +255,13 @@ class ThreadSeq:
         p.b_factors_by_chain(C_b)
         p.save(out_file)
 
+    def add_b_factor(self, out_file, rl_to):
+        print(out_file)
+        p=Protein(out_file)
+        p.b_factors(0.5)
+        p.b_factors(1, rs=rl_to)
+        p.save(out_file)
+
 if __name__=="__main__":
     print("INFO> For multi-chain structures, provide one sequence in the order of how they appear in PDB, chain sequences can be optionally separated by space or colon for the sake of clarity.\n")
     print("INFO> if sequence is not specified, no mutation is done")
@@ -273,7 +279,10 @@ if __name__=="__main__":
     opt.add_argument('-g','--gpu', action='store_true', default=False, help='Use GPU in amber')
     opt.add_argument('-c','--cores', type=int, default=1, help='Number of CPU cores used for amber')
     opt.add_argument('--scpdb', type=str, default=None, help='PDB file provides side chain coordinate')
-    opt.add_argument('--scmap', type=str, default=None, help='JSON maps chain names, scpdb into input pdb')
+    # scmap is replaced by contig_scpdb and contig_input, two contigs for residue lists afpdb.RL
+    #opt.add_argument('--scmap', type=str, default=None, help='JSON maps chain names, scpdb into input pdb')
+    opt.add_argument('--contig_scpdb', type=str, default=None, help='Contig string specifying the fixed residues in scpdb')
+    opt.add_argument('--contig_input', type=str, default=None, help='Contig string specifying the fixed residues in input')
 
     #thread_seq("1cmp.pdb1", "my_fill.pdb", "L"*44+":"+"TK")
     args = opt.parse_args()
@@ -281,7 +290,7 @@ if __name__=="__main__":
     if args.gpu:
         util.warn_msg('GPU for amber does not work most of the time!!!')
     ts=ThreadSeq(args.input)
-    ts.run(args.output, args.sequence, relax=args.relax, replace_X_with=args.replace_X, seq2bfactor=args.seq2bfactor, amber_gpu=args.gpu, cores=args.cores, side_chain_pdb=args.scpdb, chain_map=args.scmap)
+    ts.run(args.output, args.sequence, relax=args.relax, replace_X_with=args.replace_X, seq2bfactor=args.seq2bfactor, amber_gpu=args.gpu, cores=args.cores, side_chain_pdb=args.scpdb, rl_from=args.contig_scpdb, rl_to=args.contig_input)
     # thread_seq('/da/NBC/ds/zhoubi1/ides/data/init_guess/a.pdb',
     #            '/da/NBC/ds/zhoubi1/ides/data/init_guess/6a4k.pdb',
     #            'VAPLHLGKCNIAGWILGNPECESLSTASSWSYIVETPSSDNGTCYPGDFIDYEELREQLSSVSSFERFEIFPKTSSWPNHDSNKGVTAACPHAGAKSFYKNLIWLVKKGNSYPKLSKSYINDKGKEVLVLWGIHHPSTSADQQSLYQNADAYVFVGSSRYSKKFKPEIAIRPKVRDQEGRMNYYWTLVEPGDKITFEATGNLVVPRYAFAMERNAGSGIIISD:QVQLQESGPGLVKPSETLSLTCTVSGGSVNTGSYYWSWIRQPPGKGLEWIAYSSVSGTSNYNPSLKSRVTLTVDTSKNQFSLSVRSVTAADTAVYFCARLNYDILTGYYFFDFWGQGTLVIVSSASTKGPSVFPLAPSSKSASGGTAALGCLVKDYFPEPVTVSWNSGALTSGVHTFPAVLQSSGLYSLSSVVTVPSSSSGTQTYICNVNHKPSNTKVDKRVEPKSCDKT:QVELTQSPSASASLGTSVKLTCTLSSGHSTYAIAWHQQRPGKGPRYLMNLSSGGRHTRGDGIPDRFSGSSSGADRYLIISSLQSEDEADYYCQTWDAGMVFGGGTKLTVLGQSKAAPSVTLFPPSSEELQANKATLVCLISDFYPGAVTVAWKADSSPVKAGVETTTPSKQSNNKYAASSYLSLTPEQWKSHRSYSCQVTHEGSTVEKTVAPTECS',

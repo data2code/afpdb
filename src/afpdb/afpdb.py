@@ -947,24 +947,25 @@ class Protein:
             obj.data.aatype[i]=resi
         return obj
 
-    def thread_sequence(self, seq, output, relax=1, replace_X_with='', seq2bfactor=True, amber_gpu=False, cores=1, side_chain_pdb=None, chain_map=None):
+    def thread_sequence(self, seq, output, relax=1, replace_X_with='', seq2bfactor=True, amber_gpu=False, cores=1, side_chain_pdb=None, rl_from=None, rl_to=None):
         tmp=tempfile.NamedTemporaryFile(dir="/tmp", delete=False, suffix=".pdb").name
         self.save(tmp, format="pdb")
-        data=Protein.thread_sequence2(tmp, seq, output, relax=relax, replace_X_with=replace_X_with, seq2bfactor=seq2bfactor, amber_gpu=amber_gpu, cores=cores, side_chain_pdb=side_chain_pdb, chain_map=chain_map)
+        data=Protein.thread_sequence2(tmp, seq, output, relax=relax, replace_X_with=replace_X_with, seq2bfactor=seq2bfactor, amber_gpu=amber_gpu, cores=cores, side_chain_pdb=side_chain_pdb, rl_from=rl_from, rl_to=rl_to)
         os.remove(tmp)
         return data
 
     @staticmethod
-    def thread_sequence2(pdb, seq, output, relax=1, replace_X_with='', seq2bfactor=True, amber_gpu=False, cores=1, side_chain_pdb=None, chain_map=None):
+    def thread_sequence2(pdb, seq, output, relax=1, replace_X_with='', seq2bfactor=True, amber_gpu=False, cores=1, side_chain_pdb=None, rl_from=None, rl_to=None):
         """seq: can be a string, multiple chains are ":"-separated
                 ELTQSPATLSLSPGERATLSCRASQSVGRNLGWYQQKPGQAPRLLIYDASNRATGIPARFSGSGSGTDFTLTISSLEPEDFAVYYCQARLLLPQTFGQGTKVEIKRTV:EVQLLESGPGLLKPSETLSLTCTVSGGSMINYYWSWIRQPPGERPQWLGHIIYGGTTKYNPSLESRITISRDISKNQFSLRLNSVTAADTAIYYCARVAIGVSGFLNYYYYMDVWGSGTAVTVSS:WNWFDITNK
             We strongly recommend to use dictionary or JSON string
                 {"A": "ELTQSPATLSLSPGERATLSCRASQSVGRNLGWYQQKPGQAPRLLIYDASNRATGIPARFSGSGSGTDFTLTISSLEPEDFAVYYCQARLLLPQTFGQGTKVEIKRTV", "B": "EVQLLESGPGLLKPSETLSLTCTVSGGSMINYYWSWIRQPPGERPQWLGHIIYGGTTKYNPSLESRITISRDISKNQFSLRLNSVTAADTAIYYCARVAIGVSGFLNYYYYMDVWGSGTAVTVSS", "C": "WNWFDITNK"}
+            rl_from and rl_to specifies the RL of fixed residues in side_chain_pdb and input pdb, respectively.
 
         """
         from afpdb.thread_seq import ThreadSeq
         ts=ThreadSeq(pdb)
-        data=ts.run(output, seq, relax=relax, replace_X_with=replace_X_with, seq2bfactor=seq2bfactor, amber_gpu=amber_gpu, cores=cores, side_chain_pdb=side_chain_pdb, chain_map=chain_map)
+        data=ts.run(output, seq, relax=relax, replace_X_with=replace_X_with, seq2bfactor=seq2bfactor, amber_gpu=amber_gpu, cores=cores, side_chain_pdb=side_chain_pdb, rl_from=rl_from, rl_to=rl_to)
         return data
 
     def center(self):
@@ -1230,20 +1231,14 @@ class Protein:
         return t
 
     @staticmethod
-    def copy_side_chain(to_pdb, src_pdb, chain_map=None, c_seq=None):
+    def copy_side_chain(to_pdb, src_pdb, rl_from=None, rl_to=None):
         """
             RFDiffusion output PDB: to_pdb does not contain side chain atoms
             We would like to preserve side chains for the fixed positions
-            This method is to copy side chain for fixed residues based on mask provided in c_seq
+            This method is to copy side chain for fixed residues based on rs_from and rs_to
             This method is used in thread_seq.py --side_chain
 
-            chain_map: dict maps src chain name to to chain name
-            c_seq is a dictionary, specifying sequence for each chain, lower case means do not copy
-            If None, all residues are copied
-            We only copy residue side chains when to_pdb and src_pdb has the same residue and c_seq is upper case
-
-            The chain names in c_seq must match those in to_pdb
-            The chain names in src_pdb maps to to_pdb according to chain_map
+            rl_from and rl_to are RL specifying where fixed residues are in src_pdb and to_pdb, respectively
         """
         b=Protein(src_pdb)
         seq_b=b.seq_dict(gap='')
@@ -1251,36 +1246,21 @@ class Protein:
         e=Protein(to_pdb)
         seq_e=e.seq_dict(gap='')
         chains_e=e.chain_list()
-        if c_seq is None: c_seq=seq_e
-        if chain_map is None:
-            chain_map={k:v for k,v in zip(chains_b, chains_e)}
-        for s,t in chain_map.items():
-            assert(len(seq_b[s]) == len(seq_e[t]))
-            assert(len(c_seq[t]) == len(seq_e[t]))
-        # create selection based on capital sequence letters
-        pos_b=b.chain_pos()
-        pos_e=e.chain_pos()
-        sel_idx_b=[]
-        sel_idx_e=[]
-        for s,t in chain_map.items():
-            if t not in c_seq: continue # skip the chain
-            idx_b=pos_b[s][0]
-            idx_e=pos_e[t][0]
-            for x,y,mask in zip(list(seq_b[s]), list(seq_e[t]), list(c_seq[t])):
-                #print("chains", s, t, "residues", x, y, mask)
-                if mask.isupper() and x==y:
-                    sel_idx_b.append(idx_b)
-                    sel_idx_e.append(idx_e)
-                idx_b+=1
-                idx_e+=1
-        if len(sel_idx_b)==0:
+        rl_from=b.rl(rl_from)
+        rl_to=e.rl(rl_to)
+        if len(rl_from)==0:
             print("No conserved residues, no side chain to copy...")
             return e
 
-        sel_idx_b=np.array(sel_idx_b)
-        sel_idx_e=np.array(sel_idx_e)
-        b.align(e, sel_idx_b, sel_idx_e, ats="N,CA,C,O")
-        print("RMSD after backbone alignment:", b.rmsd(e, sel_idx_b, sel_idx_e, ats="N,CA,C,O"))
+        seq_from=rl_from.seq()
+        seq_to=rl_to.seq()
+        if seq_from != seq_to:
+            raise Exception("Fixed sequences do not match:\nin source> {seq_from}\nin target> {seq_to}\n")
+
+        b.align(e, rl_from, rl_to, ats="N,CA,C,O")
+        print("RMSD after backbone alignment:", b.rmsd(e, rl_from, rl_to, ats="N,CA,C,O"))
+        sel_idx_e=rl_to.data
+        sel_idx_b=rl_from.data
         e.data.atom_positions[sel_idx_e,...]=b.data.atom_positions[sel_idx_b,...]
         e.data.atom_mask[sel_idx_e,...]=b.data.atom_mask[sel_idx_b,...]
         return e

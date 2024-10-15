@@ -221,13 +221,13 @@ class ProteinMPNNParser:
         t.index=range(len(t))
         return t
 
-    def make_structure(self, pdb, output_folder):
+    def make_structure(self, pdb, output_folder, side_chain_pdb=None, rl_from=None, rl_to=None):
         p=Protein(pdb)
         os.makedirs(output_folder, exist_ok=True)
         pg=util.Progress(len(self.data))
         for i,r in self.data.iterrows():
             seq=r['seq']
-            p.thread_sequence(seq, f"{output_folder}/sample{r['sample']}.pdb", relax=0, seq2bfactor=False)
+            p.thread_sequence(seq, f"{output_folder}/sample{r['sample']}.pdb", relax=0, seq2bfactor=False, side_chain_pdb=side_chain_pdb, rl_from=rl_from, rl_to=rl_to)
             pg.check(i+1)
 
 class LigandMPNNParser:
