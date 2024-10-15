@@ -195,11 +195,12 @@ class AlphaFoldParser(ColabFoldParser):
         return None
 
 class ProteinMPNNParser:
+
     def __init__(self, folder):
         self.fd=folder
         self.data=self.parse()
 
-    def parse(self, relaxed=True):
+    def parse(self):
         S=glob.glob(f"{self.fd}/seqs/*.fa")
         out=[]
         for fn in S:
@@ -213,8 +214,46 @@ class ProteinMPNNParser:
                 if 'sample' not in x: continue
                 for k in ['sample','score','global_score','T','seq_recovery']:
                     one[k]=x[k]
-                one['seq']=r.seq
+                one['seq']=str(r.seq)
                 out.append(one)
         t=pd.DataFrame(out)
         t.sort_values('score', ascending=True, inplace=True)
+        t.index=range(len(t))
         return t
+
+    def make_structure(self, pdb, output_folder):
+        p=Protein(pdb)
+        os.makedirs(output_folder, exist_ok=True)
+        pg=util.Progress(len(self.data))
+        for i,r in self.data.iterrows():
+            seq=r['seq']
+            p.thread_sequence(seq, f"{output_folder}/sample{r['sample']}.pdb", relax=0, seq2bfactor=False)
+            pg.check(i+1)
+
+class LigandMPNNParser:
+
+    def __init__(self, folder):
+        self.fd=folder
+        self.data=self.parse()
+
+    def parse(self):
+        S=glob.glob(f"{self.fd}/seqs/*.fa")
+        out=[]
+        for fn in S:
+            #>1BC8, T=0.1, seed=111, num_res=93, num_ligand_res=93, use_ligand_context=True, ligand_cutoff_distance=8.0, batch_size=1, number_of_batches=1, model_path=./model_params/proteinmpnn_v_48_020.pt
+            #>1BC8, id=1, T=0.1, seed=111, overall_confidence=0.3848, ligand_confidence=0.3848, seq_rec=0.4946
+            name=os.path.basename(fn)
+            for r in SeqIO.parse(fn, "fasta"):
+                x={s.split("=")[0]:s.split("=")[1] for s in re.split(r',\s*', r.description) if '=' in s}
+                one={'path':fn, 'name':name}
+                if 'id' not in x: continue
+                #>1BC8, id=1, T=0.1, seed=111, overall_confidence=0.3848, ligand_confidence=0.3848, seq_rec=0.4946
+                for k in ['id','T','seed','overall_confidence','ligand_confidence','seq_rec']:
+                    one[k]=x[k]
+                one['seq']=str(r.seq)
+                out.append(one)
+        t=pd.DataFrame(out)
+        t.sort_values(['overall_confidence','ligand_confidence'], ascending=[False, False], inplace=True)
+        t.index=range(len(t))
+        return t
+
