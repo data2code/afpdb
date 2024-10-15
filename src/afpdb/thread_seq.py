@@ -255,7 +255,7 @@ class ThreadSeq:
         p.b_factors_by_chain(C_b)
         p.save(out_file)
 
-    def add_b_factor(self, out_file, rl_to):
+    def add_b_factor_rl(self, out_file, rl_to):
         print(out_file)
         p=Protein(out_file)
         p.b_factors(0.5)
