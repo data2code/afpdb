@@ -6,6 +6,7 @@
 <a href="https://anaconda.org/bioconda/afpdb" rel="nofollow">
 <img alt="Conda Version" src="https://img.shields.io/conda/vn/bioconda/afpdb">
 </a>
+
 The advent of AlphaFold and other protein AI models has transformed protein design, necessitating efficient handling of large-scale data and complex workflows. Traditional programming packages, developed before these AI advancements, often lead to inefficiencies in coding and slow execution. To bridge this gap, we introduce Afpdb, a high-performance Python module built on AlphaFold’s NumPy architecture. Afpdb leverages RFDiffusion's contig syntax to streamline residue and atom selection, making coding simpler and more readable. By integrating PyMOL’s visualization capabilities, Afpdb enables automatic visual quality control, enhancing productivity in structural biology. With over 180 methods commonly used in protein AI design, Afpdb supports the development of concise, high-performance code, addressing the limitations of existing tools like Biopython. Afpdb is designed to complement powerful AI models such as AlphaFold and ProteinMPNN, providing the additional utility needed to effectively manipulate protein structures and drive innovation in protein design.
 
 Our Afpdb manuscript will be published by "Bioinformatics" soon.
