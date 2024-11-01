@@ -173,4 +173,14 @@ p.show(show_sidechains=True)
 ```
 Output (It will be 3D interactive within Jupyter Notebook)<br>
 <img src="https://github.com/data2code/afpdb/blob/main/tutorial/img/demo.png?raw=true">
-
+### PyMOL Integration
+```
+# convert the selection into a PyMOL selection command
+rs = (rs_binder | P).str(format="PYMOL", rs_name="myint")
+cmd=f'''fetch 5cil, myobj; util.cbc;
+{rs}
+show sticks, myint; zoom myint; deselect;
+save binders.pse
+# generate a PyMOL session file binders.pse
+Protein.PyMOL().run(cmd)
+```
