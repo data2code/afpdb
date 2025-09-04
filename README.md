@@ -188,7 +188,6 @@ Output (It will be 3D interactive within Jupyter Notebook)<br>
 
 <img src="https://github.com/data2code/afpdb/blob/main/tutorial/img/demo.png?raw=true">
 
-
 ### Antibody Analysis & PyMOL Visualization
 ```
 # identify the variable domain, CDR regions, use B-factors to represent different CDR regions
