@@ -7,9 +7,11 @@
 <img alt="Conda Version" src="https://img.shields.io/conda/vn/bioconda/afpdb">
 </a>
 
-The emergence of AlphaFold and subsequent protein AI models has revolutionized protein design. To maximize the probability of success, the AI-driven protein design process involves analyzing thousands of protein structures. This includes handling structure file read/write operations, aligning structures and measuring structural deviations, standardizing chain/residue labels, extracting residues, identifying mutations, and creating visualizations. However, existing programming packages predate the recent AI breakthroughts, leading to extra human coding and slow code execution. To bridge this gap, we introduce the Afpdb module. Built upon AlphaFold’s numpy architecture, Afpdb offers a high-performance computing core. By leveraging the intuitive contig syntax proposed by RFDiffusion, afpdb makes code succint and readable. By offering a user-friendly interface that seamlessly integrates with PyMOL, afpdb automates visual quality control. Providing over 190 methods commonly used in protein AI design but not readily available elsewhere, afpdb enables users to write less but faster code for protein structure analyses.
+The advent of AlphaFold and other protein AI models has transformed protein design, necessitating efficient handling of large-scale data and complex workflows. Traditional programming packages, developed before these AI advancements, often lead to inefficiencies in coding and slow execution. To bridge this gap, we introduce Afpdb, a high-performance Python module built on AlphaFold’s NumPy architecture. Afpdb leverages RFDiffusion's contig syntax to streamline residue and atom selection, making coding simpler and more readable. By integrating PyMOL’s visualization capabilities, Afpdb enables automatic visual quality control, enhancing productivity in structural biology. With over 190 methods commonly used in protein AI design, Afpdb supports the development of concise, high-performance code, addressing the limitations of existing tools like Biopython. Afpdb is designed to complement powerful AI models such as AlphaFold and ProteinMPNN, providing the additional utility needed to effectively manipulate protein structures and drive innovation in protein design.
 
-Automatic chain alignment, antibody analysis support, simplified PyMOL visualization for multiple protein objects, and many methods have been added in version 0.3. The algorithm to identify gaps within a chain are improved to minimize false gaps. Tests, docstring, and argument typing are improved to help Github Coplit to understand the module better. To explore these new features, please search for the tag "#2025JUL" in the Notebook or tutorial documentation.
+Automatic chain alignment, antibody analysis, simplified PyMOL visualization for multiple protein objects, and many methods have been added in version 0.3. The algorithm to identify gaps within a chain are improved to minimize false gaps. Tests, docstring, and argument typing are improved to help Github Coplit to understand the module better. To explore these new features, please search for the tag "#2025JUL" in the Notebook or tutorial documentation.
+
+Please read our short artical published in <a href="https://doi.org/10.1093/bioinformatics/btae654">Bioinformatics</a>.
 
 <img src="https://github.com/data2code/afpdb/blob/main/tutorial/img/afpdb.png?raw=true">
 
@@ -137,7 +139,7 @@ Output
  0  H        VQLVQSGAEVKRPGSSVTVS...        220                    8                 14                     1                  226
  1  L        EIVLTQSPGTQSLSPGERAT...        212                    0                  1                     1                  211
  2  P        NWFDITNWLWYIK                   13                    0                  0                     1                   13
- ```
+```
 ### Replace Missing Residues for AI Prediction
 ```
 print("Sequence for AlphaFold modeling, with missing residues replaced by Glycine:")
@@ -183,7 +185,9 @@ q.save("binders.pdb")
 q.show(show_sidechains=True)
 ```
 Output (It will be 3D interactive within Jupyter Notebook)<br>
+```
 <img src="https://github.com/data2code/afpdb/blob/main/tutorial/img/demo.png?raw=true">
+```
 
 ### Antibody Analysis & PyMOL Visualization
 ```
