@@ -45,6 +45,8 @@ class ThreadSeq:
     def __init__(self, pdb_file):
         self.pdb=pdb_file
         self.p=Protein(pdb_file)
+        # remember the order of chains, so that we can preserve the order at the end
+        self.old_chain_contig = ":".join(self.p.chain_id())
         self.old_seq=self.p.seq_dict()
         self.chains=self.p.chain_list()
         # identify residues with missing atoms
@@ -131,7 +133,7 @@ class ThreadSeq:
                 if side_chain_pdb is not None and rl_from is not None and rl_to is not None:
                     self.add_b_factor_rl(out_file, rl_to)
                 else:
-                    self.add_b_factor(out_file, rl_to, seq)
+                    self.add_b_factor(out_file, seq)
             except Exception as e:
                 print(traceback.format_exc())
                 print("Skip b factor!!!!!")
@@ -141,6 +143,8 @@ class ThreadSeq:
         # return JSON
         data={}
         p=Protein(out_file)
+        p=p.extract(self.old_chain_contig)
+        p.save(out_file)
         out_seq=p.seq_dict()
         same=True
         for k,v in seq.items():

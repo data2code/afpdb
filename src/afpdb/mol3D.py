@@ -12,6 +12,12 @@ pymol_color_list = ["#33ff33","#00ffff","#ff33cc","#ffff00","#ff9999","#e5e5e5",
 from string import ascii_uppercase, ascii_lowercase
 alphabet_list = list(ascii_uppercase+ascii_lowercase)
 
+try:
+    import IPython.display
+    _has_IPython = True
+except ImportError:
+    _has_IPython = False
+
 def my_style(self, color, style, chains=1, model_id=0):
   if color=="lDDT":
     self.setStyle({'model': model_id}, {style: {'colorscheme': {'prop':'b','gradient': 'roygb','min':50,'max':90}}})
@@ -46,6 +52,13 @@ class Mol3D:
 
     URL='https://3dmol.org/build/3Dmol.js'
 
+    def __init__(self):
+        self.n_model=0
+        self.view=None
+        # Fluent interface state
+        self.width=480
+        self.height=480
+
     def add_model(self, pdb_file):
         if pdb_file is None or pdb_file=="_model_":
             # multiple models, model already preloaded
@@ -59,15 +72,55 @@ class Mol3D:
             p._renumber('RESTART')
             data=p.to_pdb_str()
             self.view.addModel(data,'pdb')
+            self.n_model+=1
 
-    def show(self, pdb_file=None, show_sidechains=False, show_mainchains=False, color="lDDT", style="cartoon", width=480, height=480, model_id=0):
+    def show(self, pdb_file=None, show_sidechains=False, show_mainchains=False, color="lDDT", style="cartoon", width=None, height=None, model_id=None, html=False):
         """
-        color: lDDT/b, spectrum/rainbow, chain, ss
-        style: cartoon, stick, line, sphere, cross
-        Not all combinations work, see https://3dmol.org/viewer.html?pdb=4KW4&select=all&style=cartoon:color~spectrum;stick:radius~0.25,colorscheme~greenCarbon&select=bonds:0&style=sphere:radius~0.5
+        Show a protein structure in 3Dmol with fluent interface support.
+        
+        Args:
+            pdb_file: Protein data (file path, PDB string, or Protein object).
+                     If None, finalizes the visualization and returns HTML.
+            show_sidechains (bool): Show side chains as sticks
+            show_mainchains (bool): Show backbone as sticks  
+            color (str): Color scheme - "lDDT/b", "spectrum/rainbow", "chain", "ss"
+            style (str): Display style - "cartoon", "stick", "line", "sphere", "cross"
+            width (int): Viewer width (can be set/overridden)
+            height (int): Viewer height (can be set/overridden)
+            model_id (int): Specific model ID to use
+            html (bool): Return HTML string instead of viewer. If False (default), returns 
+
+        Returns:
+            self for chaining when pdb_file is provided, or HTML string when finalizing
+            
+        Fluent Interface Examples:
+            # Chain multiple proteins and finalize
+            >>> Mol3D().show(p1, color="chain").show(p2, color="spectrum").show()
+            
+            # Set dimensions early
+            >>> Mol3D().show(p1, width=800, height=600).show(p2).show()
         """
-        self.view = py3Dmol.view(js=Mol3D.URL, width=width, height=height)
+        # Update state with any provided parameters
+        if width is not None:
+            self.width = width
+        if height is not None:
+            self.height = height
+            
+        # Initialize view if needed
+        if self.view is None:
+            self.view = py3Dmol.view(js=Mol3D.URL, width=self.width, height=self.height)       # If pdb_file is None, finalize the visualization
+        
+        # rendering
+        if pdb_file is None:
+            s_html = self.view.my_html()
+            if html or not _has_IPython:
+                return s_html
+            else:
+                return IPython.display.publish_display_data({'application/3dmoljs_load.v0':s_html, 'text/html': s_html},metadata={})
+
+        # Add model
         self.add_model(pdb_file)
+        model_id=self.n_model-1 if model_id is None else model_id
         self.view.my_style(color, style, model_id=model_id, chains=self.chains)
 
         if show_sidechains:
@@ -82,7 +135,8 @@ class Mol3D:
             BB = ['C','O','N','CA']
             self.view.addStyle({'atom':BB},{'stick':{'colorscheme':f"WhiteCarbon",'radius':0.3}})
 
-        return self.view.my_html()
+        # Return self for chaining
+        return self
 
     def cartoon_b(self, pdb_file=None, width=480, height=480, model_id=0):
         return self.show(pdb_file, color="lDDT", style="cartoon", width=width, height=height, model_id=model_id)
@@ -111,7 +165,7 @@ class Mol3D:
 
     # currently color by chain only works if chains are named as A, B, C ...
     # otherwise, you need to rename chains in pymol first
-    def show_stick_chain(pdb_file=None, width=480, height=480, model_id=0):
+    def show_stick_chain(self, pdb_file=None, width=480, height=480, model_id=0):
         return self.show(pdb_file, color="chain", style="stick", width=width, height=height, model_id=model_id)
 
     def show_many(self, S_pdb, S_style, S_color, S_chains=None, width=480, height=480):

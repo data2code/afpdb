@@ -7,7 +7,9 @@
 <img alt="Conda Version" src="https://img.shields.io/conda/vn/bioconda/afpdb">
 </a>
 
-The emergence of AlphaFold and subsequent protein AI models has revolutionized protein design. To maximize the probability of success, the AI-driven protein design process involves analyzing thousands of protein structures. This includes handling structure file read/write operations, aligning structures and measuring structural deviations, standardizing chain/residue labels, extracting residues, identifying mutations, and creating visualizations. However, existing programming packages predate the recent AI breakthroughts, leading to extra human coding and slow code execution. To bridge this gap, we introduce the Afpdb module. Built upon AlphaFold’s numpy architecture, Afpdb offers a high-performance computing core. By leveraging the intuitive contig syntax proposed by RFDiffusion, afpdb makes code succint and readable. By offering a user-friendly interface that seamlessly integrates with PyMOL, afpdb automates visual quality control. Providing over 180 methods commonly used in protein AI design but not readily available elsewhere, afpdb enables users to write less but faster code for protein structure analyses.
+The emergence of AlphaFold and subsequent protein AI models has revolutionized protein design. To maximize the probability of success, the AI-driven protein design process involves analyzing thousands of protein structures. This includes handling structure file read/write operations, aligning structures and measuring structural deviations, standardizing chain/residue labels, extracting residues, identifying mutations, and creating visualizations. However, existing programming packages predate the recent AI breakthroughts, leading to extra human coding and slow code execution. To bridge this gap, we introduce the Afpdb module. Built upon AlphaFold’s numpy architecture, Afpdb offers a high-performance computing core. By leveraging the intuitive contig syntax proposed by RFDiffusion, afpdb makes code succint and readable. By offering a user-friendly interface that seamlessly integrates with PyMOL, afpdb automates visual quality control. Providing over 190 methods commonly used in protein AI design but not readily available elsewhere, afpdb enables users to write less but faster code for protein structure analyses.
+
+Automatic chain alignment, antibody analysis support, simplified PyMOL visualization for multiple protein objects, and many methods have been added in version 0.3. The algorithm to identify gaps within a chain are improved to minimize false gaps. Tests, docstring, and argument typing are improved to help Github Coplit to understand the module better. To explore these new features, please search for the tag "#2025JUL" in the Notebook or tutorial documentation.
 
 <img src="https://github.com/data2code/afpdb/blob/main/tutorial/img/afpdb.png?raw=true">
 
@@ -28,21 +30,32 @@ Table of Content
    - Residue Selection
    - Residue List
 4. Read/Write
+  - PDB Information
 5. Sequence & Chain
+  - Extarction
+  - Missing Residues
+  - REsidue Numbering
 6. Geometry, Measurement, & Visualization
    - Select Neighboring Residues
    - Display
    - B-factors
    - PyMOL Interface
+   - PyMOL3D Display
    - RMSD
    - Solvent-Accessible Surface Area (SASA)
    - Secondary Structures - DSSP
+   - Bond Length
    - Internal Coordinates
 7. Object Manipulation
    - Move Objects
    - Align
+   - Automatic Chain Mapping & Alignment
    - Split & Merge Objects
-8. Parsers for AI Models
+8. Antibodies
+   - CDR Identification
+   - CDR Visualization
+   - scFv Analysis
+9. Parsers for AI Models
 
 ## AI Use Cases
 
@@ -96,7 +109,7 @@ Output
 ```
     Chain    Sequence                    Length    #Missing Residues    #Insertion Code    First Residue Name    Last Residue Name
 --  -------  ---------------------------------------------------------------------------------------------------------------------
- 0  H        VQLVQSGAEVKRPGSSVTVS...        220                   20                 14                     2                  227
+ 0  H        VQLVQSGAEVKRPGSSVTVS...        220                    8                 14                     2                  227
  1  L        EIVLTQSPGTQSLSPGERAT...        212                    0                  1                     1                  211
  2  P        NWFDITNWLWYIK                   13                    0                  0                   671                  683
 ```
@@ -121,7 +134,7 @@ Output
 ```
     Chain    Sequence                    Length    #Missing Residues    #Insertion Code    First Residue Name    Last Residue Name
 --  -------  ---------------------------------------------------------------------------------------------------------------------
- 0  H        VQLVQSGAEVKRPGSSVTVS...        220                   20                 14                     1                  226
+ 0  H        VQLVQSGAEVKRPGSSVTVS...        220                    8                 14                     1                  226
  1  L        EIVLTQSPGTQSLSPGERAT...        212                    0                  1                     1                  211
  2  P        NWFDITNWLWYIK                   13                    0                  0                     1                   13
  ```
@@ -157,18 +170,100 @@ Output
 ### Residue Selection & Boolean Operations
 ```
 # create a new PDB file only containing the antigen and binder residues
-p=p.extract(rs_binder | "P")
+q=p.extract(rs_binder | "P")
 ```
 ### Structure I/O
 ```
 # save the new structure into a local PDB file
-p.save("binders.pdb")
+q.save("binders.pdb")
 ```
 ### Structure Display within Jupyter Notebook
 ```
 # display the PDB struture, default is show ribbon and color by chains.
-p.show(show_sidechains=True)
+q.show(show_sidechains=True)
 ```
 Output (It will be 3D interactive within Jupyter Notebook)<br>
 <img src="https://github.com/data2code/afpdb/blob/main/tutorial/img/demo.png?raw=true">
 
+### Antibody Analysis & PyMOL Visualization
+```
+# identify the variable domain, CDR regions, use B-factors to represent different CDR regions
+rs_cdr, rs_var, c_chain_type, c_cdr = p.rs_antibody(scheme="imgt", set_b_factor=True)
+# remove constant domain, only keep the variable domain for antibody
+# we translate the coordindate of the truncated protein by a small amount to avoid q being shadowed by p in the display
+q=p.extract(rs_var | p.rs("P")).translate([0.5, 0.5, 0.5], inplace=True)
+print(q.len_dict())
+# The truncated antibody is smaller, as it only contains the variable domain
+
+# color the full antibody variable+constant in white
+# The truncated variable-only object in rainbow color
+Protein.PyMOL3D() \
+  .show(p, color="white") \
+  .show(q, color="spectrum") \
+  .show(output="myAb.pse", save_png=True, width=250, height=250)
+# A PyMOL session file and png file are generated.
+```
+Output (myAb.pse can be opened with PyMOL)<br>
+```
+{'H': 220, 'L': 212, 'P': 13}
+{'H': 126, 'L': 108, 'P': 13}
+Save: Please wait -- writing session file...
+Save: wrote "myAb.pse".
+PyMOL session saved: myAb.pse
+High-quality image saved: myAb.png
+
+<img src="https://github.com/data2code/afpdb/blob/main/tutorial/img/myAb.png?raw=true">
+```
+### Automatic Object Alignment
+```
+# We remove constant domain, change chain names, and translate the new protein
+q = p.truncate_antibody() \
+    .rename_chains({"H":"X", "L":"Y", "P":"Z"}) \
+    .translate([3, 4, 5], inplace=True)
+# The new protein is shorter
+print(q.len_dict())
+# Automatic chain pairing and sequence alignment
+p2, q2, rl_p, rl_q = p.align_two(q, auto_chain_map=True)
+# aligned portion
+# The alignment output indicates it figures out chain H/L/P should be paired with X/Y/Z.
+print("Original protein p:", rl_p, "\n")
+print("Truncated protein q:", rl_q, "\n")
+print("RMSD (expecting 0):", p.rmsd(q, rl_p, rl_q, align=True))
+```
+Output<br>
+```
+{'X': 126, 'Y': 108, 'Z': 13}
+
+Chain Mapped: H <> X
+target            0 VQLVQSGAEVKRPGSSVTVSCKASGGSFSTYALSWVRQAPGRGLEWMGGVIPLLTITNYA
+                  0 ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+query             0 VQLVQSGAEVKRPGSSVTVSCKASGGSFSTYALSWVRQAPGRGLEWMGGVIPLLTITNYA
+
+target           60 PRFQGRITITADRSTSTAYLELNSLRPEDTAVYYCAREGTTGDGDLGKPIGAFAHWGQGT
+                 60 ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+query            60 PRFQGRITITADRSTSTAYLELNSLRPEDTAVYYCAREGTTGDGDLGKPIGAFAHWGQGT
+
+target          120 LVTVSS 126
+                120 |||||| 126
+query           120 LVTVSS 126
+
+Chain Mapped: L <> Y
+target            0 EIVLTQSPGTQSLSPGERATLSCRASQSVGNNKLAWYQQRPGQAPRLLIYGASSRPSGVA
+                  0 ||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+query             0 EIVLTQSPGTQSLSPGERATLSCRASQSVGNNKLAWYQQRPGQAPRLLIYGASSRPSGVA
+
+target           60 DRFSGSGSGTDFTLTISRLEPEDFAVYYCQQYGQSLSTFGQGTKVEVK 108
+                 60 |||||||||||||||||||||||||||||||||||||||||||||||| 108
+query            60 DRFSGSGSGTDFTLTISRLEPEDFAVYYCQQYGQSLSTFGQGTKVEVK 108
+
+Chain Mapped: P <> Z
+target            0 NWFDITNWLWYIK 13
+                  0 ||||||||||||| 13
+query             0 NWFDITNWLWYIK 13
+
+Original protein p: H2-113:L1-107:P 
+
+Truncated protein q: X:Y:Z 
+
+RMSD (expecting 0): 7.16936768611062e-15
+```

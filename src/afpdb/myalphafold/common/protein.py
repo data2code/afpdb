@@ -30,6 +30,7 @@ ModelOutput = Mapping[str, Any]  # Is a nested dict.
 # Complete sequence of chain IDs supported by the PDB format.
 PDB_CHAIN_IDS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
 PDB_MAX_CHAINS = len(PDB_CHAIN_IDS)  # := 62.
+_DEBUG=False
 
 
 #YZ: @dataclasses.dataclass(frozen=True)
@@ -177,7 +178,8 @@ class Protein:
     p.chain_id=unique_chain_ids
     p.warning(c_warning)
     if sum([len(v) for k,v in c_warning.items()]):
-        print(f"Warning: {c_warning}")
+        if _DEBUG:
+            print(f"Warning: {c_warning}")
     p.header=structure.header
     return p
 
