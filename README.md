@@ -185,9 +185,8 @@ q.save("binders.pdb")
 q.show(show_sidechains=True)
 ```
 Output (It will be 3D interactive within Jupyter Notebook)<br>
-```
+
 <img src="https://github.com/data2code/afpdb/blob/main/tutorial/img/demo.png?raw=true">
-```
 
 ### Antibody Analysis & PyMOL Visualization
 ```
@@ -215,9 +214,9 @@ Save: Please wait -- writing session file...
 Save: wrote "myAb.pse".
 PyMOL session saved: myAb.pse
 High-quality image saved: myAb.png
-
-<img src="https://github.com/data2code/afpdb/blob/main/tutorial/img/myAb.png?raw=true">
 ```
+<img src="https://github.com/data2code/afpdb/blob/main/tutorial/img/myAb.png?raw=true">
+
 ### Automatic Object Alignment
 ```
 # We remove constant domain, change chain names, and translate the new protein
