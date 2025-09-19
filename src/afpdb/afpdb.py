@@ -33,13 +33,13 @@ try:
     import pymol2
     _PYMOL_=True
 except Exception as e:
-    print(e)
+    #print(e)
     _PYMOL_=False
 try:
     from afpdb import antibody
     _Ab_=True
 except Exception as e:
-    print(e)
+    #print(e)
     _Ab_=False
 
 from afpdb import util,pdbinfo
@@ -324,6 +324,7 @@ class Protein:
         self.chain_id() # make sure we have self.data.chain_id
 
     def _set_data(self, data: Any, contig: ContigType = None, assembly1: bool = False) -> None:
+        self.data=None
         cls=type(data)
         if data is None or ((type(data) is str) and data ==''):
             data="MODEL     1\nENDMDL\nEND"
@@ -3326,7 +3327,7 @@ class Protein:
             mask = self.data.atom_mask[resi][:, atom] == 0
             coord[mask] = np.nan
             return coord
-        
+
         atom = ATS.i(atom)
         resi = self.rs(rs).data
         coord = coordinate(resi, atom)
