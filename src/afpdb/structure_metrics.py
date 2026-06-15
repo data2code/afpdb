@@ -30,7 +30,7 @@ class StructureMetrics:
         """
         Compute average PAE score for interface residues between chain1 and chain2.
         Interface residues are identified using rs_around.
-        Normalized to [0, 1], where 1 means accurate prediction
+        Normalized to [0, 1], where 0 means accurate prediction
         """
         if self.pae is None:
             return np.nan
@@ -38,7 +38,8 @@ class StructureMetrics:
         if len(rs1) == 0 or len(rs2) == 0:
             return np.nan
         pae_sub = [(self.pae[i, j] + self.pae[j, i]) / 2 for i, j in zip(dist.resi_a, dist.resi_b)]
-        return 1-np.mean(pae_sub)/35.0
+        # 2026-12-15, https://alphafold.com/faq, modified from 35 to 31.75
+        return np.mean(pae_sub)/31.75
 
     def compute_pae_int(self, cutoff=5.0):
         """
@@ -55,11 +56,41 @@ class StructureMetrics:
                 results[(chain2, chain1)] = results[(chain1, chain2)]
         return results
 
+    def compute_ipae_pair(self, chain1, chain2):
+        """
+        Compute average PAE score for all residues between chain1 and chain2.
+        Normalized to [0, 1], where 0 means accurate prediction
+        """
+        if self.pae is None:
+            return np.nan
+        idx1 = self.protein.rs(chain1).data
+        idx2 = self.protein.rs(chain2).data
+        pae_sub = (self.pae[np.ix_(idx1, idx2)]+self.pae[np.ix_(idx2, idx1)].T)/2
+        return np.mean(pae_sub)/31.75
+
+    def compute_ipae(self):
+        """
+        Compute average PAE score for all chain pairs.
+        Returns a dict of results.
+        """
+        results = {}
+        chains = self.protein.chain_id()
+        for chain1 in chains:
+            for chain2 in chains:
+                if chain1 <= chain2:
+                    continue
+                results[(chain1, chain2)] = self.compute_ipae_pair(chain1, chain2)
+                results[(chain2, chain1)] = results[(chain1, chain2)]
+        return results
+
     def compute_plddt_int_pair(self, chain1, chain2, cutoff=5.0):
         """
         Compute average pLDDT score for interface residues between chain1 and chain2.
         Interface residues are identified using rs_around.
         Normalized to [0, 1]
+
+        2026-12-15 output a tuple, as we may be only interested in the binder pLDDT, as in BindCraft
+            (chain1+chain2, chain1-only, chain2-only)
         """
         if self.plddt is None:
             return np.nan
@@ -67,9 +98,14 @@ class StructureMetrics:
         int_idx1 = rs1.data
         int_idx2 = rs2.data
         all_int_idx = np.unique(np.concatenate([int_idx1, int_idx2]))
-        if len(all_int_idx) == 0:
-            return np.nan
-        return np.mean(self.plddt[all_int_idx])/100
+        out=[np.nan, np.nan, np.nan]
+        if len(all_int_idx):
+            out[0] = np.mean(self.plddt[all_int_idx])/100
+        if len(int_idx1):
+            out[1] = np.mean(self.plddt[int_idx1])/100
+        if len(int_idx2):
+            out[1] = np.mean(self.plddt[int_idx2])/100
+        return out
 
     def compute_plddt_int(self, cutoff=5.0):
         """
@@ -89,6 +125,13 @@ class StructureMetrics:
     def compute_iptm_pair(self, chain1, chain2):
         """
         Compute PTM (Predicted TM-score) for a given chain pair.
+
+        Note: we cannot reproduce PTM/iPTM reported by AF2, as AF2 computes Tm per bin, then
+              probabilistically average the values.
+
+              We relies on PAE, where probabilistic average were taken over bins already.
+              See https://github.com/google-deepmind/alphafold/blob/main/alphafold/common/confidence.py
+              For real AF2 implementation
         """
         if self.pae is None:
             return np.nan
@@ -111,6 +154,7 @@ class StructureMetrics:
         for chain1 in chains:
             chain2 = ":".join([chain for chain in chains if chain != chain1])
             results[chain1] = self.ptm_matrix_pair(chain1, chain2, L_mode="all")[1]
+        # I think AF2 compute iPTM by masking out all intra-chain PAE elements
         results['complex'] = max([results[chain] for chain in chains])
         return results
 
@@ -236,7 +280,7 @@ class StructureMetrics:
     def calc_d0(self, L):
         """Calculate d0 for PTM/ipSAE scoring (protein chains only)."""
         L = float(L)
-        if L < 27:
+        if L < 27: # AF2 uses 19 as the cutoff
             L = 27
         d0 = 1.24 * (L - 15) ** (1.0 / 3.0) - 1.8
         return max(1.0, d0)
@@ -293,7 +337,7 @@ class StructureMetrics:
         plddt_int = self.compute_plddt_int_pair(chain1, chain2, cutoff=pae_plddt_int_cutoff)
 
         return {
-            "PTM": iptm,
+            "iPTM": iptm,
             "ipSAE": ipsae,
             "pDockQ": pdockq,
             "pDockQ2": pdockq2,
@@ -328,6 +372,7 @@ if __name__ == "__main__":
 
     # Calculate metrics
     iptm = metrics.compute_iptm()
+    ipae = metrics.compute_ipae()
     ipsae = metrics.compute_ipsae(pae_cutoff=10.0)
     pdockq, pdockq2 = metrics.compute_pdockq(dist_cutoff=8.0)
     lis = metrics.compute_lis(pae_threshold=12.0)
@@ -336,6 +381,7 @@ if __name__ == "__main__":
 
     # Output results for comparison
     print("iPTM:", iptm)
+    print("iPAE:", ipae)
     print("ipSAE:", ipsae)
     print("pDockQ:", pdockq)
     print("pDockQ2:", pdockq2)

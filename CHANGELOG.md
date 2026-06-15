@@ -1,5 +1,20 @@
 # Change Log
 
+## v0.3.5
+
+Bug fixes: find_aligned_positions()
+Bug fixes: save empty structure save()
+
+- 
+## v0.3.4
+
+### Feature
+- Protein: interaction_analyzer
+	align_two: support the specification of chain_a/chain_b, while auto_chain_map is True
+    rl_align_multi: accepts prealign as a dict of user-provided hints
+	align_two & rl_align_multi support top_candidates=-1, which explore all sensible
+		alignment paths, which is important for multimer alignment
+
 ## v0.3.0
 
 ### Feature

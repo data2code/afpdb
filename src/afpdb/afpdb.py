@@ -254,8 +254,9 @@ class Protein:
     #    NOCODE: remove insertion code, 6A, 6B will become 6, 7
 
     RENUMBER={'NONE':None, 'RESTART':'RESTART', 'CONTINUE':'CONTINUE', 'GAP200':'GAP200', 'NOCODE':'NOCODE'}
-    MIN_GAP_DIST=4.5 # used by seq(), when there are numbering gap in neighboring residues
+    MIN_GAP_DIST=4.2 # used by seq(), when there are numbering gap in neighboring residues
                     # we consider no gap if Ca-Ca distance is smaller than this threshold (typically 3.82A, if no deletion)
+                    # Dec 17, 2025, change from 4.5 to 4.2, 4.5 is too large for the missing HCDR2 in 5cil
 
 
     _DEBUG=False
@@ -634,6 +635,14 @@ class Protein:
                 data.append([chain, prev_pos, prev_resn, pos, resn[i], bond_n_ca, bond_ca_c, bond_pept])
         df = pd.DataFrame(data, columns=['chain', 'resi_a', 'resn_a', 'resi_b', 'resn_b', 'bond_n_ca', 'bond_ca_c', 'bond_pept'])
         return df
+
+    def interaction_analyzer(self, add_hydrogens=True) -> 'InteractionAnalyzer':
+        """
+        Return:
+        An interaction analyzer object for analyzing molecular interactions.
+        """
+        check_PyMOL()
+        return InteractionAnalyzer(self, add_hydrogens=add_hydrogens)
 
     def resn(self, new_resn: Optional[Union[List[str], np.ndarray]] = None, rl: ContigType = None) -> Optional[np.ndarray]:
         old=self.data.residue_index.copy()
@@ -1126,7 +1135,10 @@ class Protein:
 
     def to_pdb_str(self) -> str:
         """Convert protein structure to PDB format string."""
-        data_str=afprt.to_pdb(self.data)
+        if len(self.data.aatype)==0:
+            data_str="MODEL     1\nENDMDL\nEND"
+        else:
+            data_str=afprt.to_pdb(self.data)
         return data_str
 
     def from_cif(self, fn: Union[str, pathlib.Path], model: Optional[int] = None, chains: Optional[List[str]] = None) -> 'Protein':
@@ -1223,6 +1235,7 @@ class Protein:
     def from_sequence(self, seq: Union[str, Dict[str, str]]) -> 'Protein':
         """Build protein structure from sequence string or dictionary."""
         if type(seq) is str:
+            if seq=="": return Protein()
             S=seq.upper().split(":")
             seq={afprt.PDB_CHAIN_IDS[i] :x for i,x in enumerate(S)}
         check_PyMOL()
@@ -1388,8 +1401,9 @@ class Protein:
                         style=style, output=output, save_png=save_png,
                         width=width, height=height).show()
 
-    def sasa(self, rs_chain: ContigType = None, add_hydrogen: bool = True) -> pd.DataFrame:
-        """Calculate solvent-accessible surface area for residues."""
+    def sasa(self, rs_chain: ContigType = None, add_hydrogen: bool = False) -> pd.DataFrame:
+        """Calculate solvent-accessible surface area for residues.
+        We change add_hydrogen to False by default after version 0.3.4"""
         obj=self.extract(rs_chain)
         structure=obj.to_biopython(add_hydrogen=add_hydrogen)
         from Bio.PDB.SASA import ShrakeRupley
@@ -1418,7 +1432,7 @@ class Protein:
         #t.display()
         return t
 
-    def dsasa(self, rs_chain_a: ContigType, rs_chain_b: ContigType, add_hydrogen: bool = True) -> pd.DataFrame:
+    def dsasa(self, rs_chain_a: ContigType, rs_chain_b: ContigType, add_hydrogen: bool = False) -> pd.DataFrame:
         """Classify residues based on SASA, according to:
             Levy ED, A Simple Definition of Structural Regions in Proteins and
             Its Use in Analyzing Interface Evolution
@@ -1441,6 +1455,8 @@ class Protein:
                 rim: around the edge of the binding interface
                 surface: surface residues not involved in the interaction
                 interior: interior residues not exposed to solvent
+
+        We change add_hydrogen to False by default after version 0.3.4
         """
         rs_a=self.rs(rs_chain_a)
         rs_b=self.rs(rs_chain_b)
@@ -2805,10 +2821,11 @@ class Protein:
         rl_a=RL(self, rl_a)
         rl_b=RL(obj_b, rl_b)
         assert(len(rl_a)==1 or len(rl_b)==1 or len(rl_a)==len(rl_b))
+        if len(rl_a)==0 or len(rl_b)==0:
+            util.error_msg("rl_a or rl_b is empty in rmsd()!")
         ats=ATS(ats)
         if ats.is_empty():
             util.error_msg("ats cannot be empty in rmsd()!")
-
         if align:
             R,t=self.align(target_p=obj_b, rl_a=rl_a, rl_b=rl_b, ats=ats)
 
@@ -3496,19 +3513,26 @@ class Protein:
         total = identical = 0
         aligned_positions_seq1 = []
         aligned_positions_seq2 = []
-        seq1_index = seq2_index = 0
-        for res1, res2 in zip(seq_a, seq_b):
-            l_next1=res1 not in ('-',)
-            l_next2=res2 not in ('-',)
-            if l_next1 and l_next2:
-                if res1!='X' and res2!='X':
-                    aligned_positions_seq1.append(seq1_index)
-                    aligned_positions_seq2.append(seq2_index)
+        # indices may not start from 0, some fragment may not be part of the alignment
+        for res1, res2, idx1, idx2 in zip(seq_a, seq_b, best_alignment.indices[0], best_alignment.indices[1]):
+            if res1 != '-' and res2 != '-':
+                if res1 != 'X' and res2 != 'X':
+                    aligned_positions_seq1.append(idx1)
+                    aligned_positions_seq2.append(idx2)
                     total += 1
                     if res1 == res2:
-                        identical+=1
-            if l_next1: seq1_index += 1
-            if l_next2: seq2_index += 1
+                        identical += 1
+#             l_next1=res1 not in ('-',)
+#             l_next2=res2 not in ('-',)
+#             if l_next1 and l_next2:
+#                 if res1!='X' and res2!='X':
+#                     aligned_positions_seq1.append(seq1_index)
+#                     aligned_positions_seq2.append(seq2_index)
+#                     total += 1
+#                     if res1 == res2:
+#                         identical+=1
+#             if l_next1: seq1_index += 1
+#             if l_next2: seq2_index += 1
         identity = identical/total *100 if total > 0 else 0.0
         return ((best_alignment, identity), aligned_positions_seq1, aligned_positions_seq2)
 
@@ -3557,12 +3581,14 @@ class Protein:
             return self.rs('NONE'), obj_b.rs('NONE')
         return RL._or(*out_a), RL._or(*out_b)
 
-    def rl_align_multi(self, obj_b, is_global=False, match=2, xmatch=-1, gap_open=-1.5, gap_ext=-0.2, min_identity=0.3):
+    def __to_be_deleted_rl_align_multi(self, obj_b, is_global=False, match=2, xmatch=-1, gap_open=-1.5, gap_ext=-0.2, min_identity=0.3, prealign=None):
         """Automatically map chains between two objects. Ignore chain labels, but consider both sequence similarity
         and structure similarity.
 
         For the first aligned pair, we accept them without apply identity cutoff
         Subsequent pairs must have identity above min_identity to be considered
+
+        prealign: the (self, obj_b) chain mapping to use as a starting point (hints provided by user)
 
         Return: (chain_map_a, chain_map_b, rl_a, rl_b)
             chain_map_a: the list of chains from self
@@ -3574,6 +3600,15 @@ class Protein:
         c_pos_b=q.chain_pos()
         c_seq_a=p.seq_dict()
         c_seq_b=q.seq_dict()
+        prealign_chain_a = []
+        prealign_chain_b = []
+        if prealign is not None:
+            for a, b in prealign.items():
+                if a in c_seq_a and b in c_seq_b:
+                    prealign_chain_a.append(a)
+                    prealign_chain_b.append(b)
+                else:
+                    print(f"WARNING> prealign chain {a} or {b} not found in the respective proteins, ignoring this pair.")
         chain_a=[x for x in p.chain_id()]
         chain_b=[x for x in q.chain_id()]
         n,m = len(c_seq_a), len(c_seq_b)
@@ -3585,7 +3620,11 @@ class Protein:
         for i,a in enumerate(chain_a):
             seq_a=c_seq_a[a]
             posX2pos_a=Protein.posX2pos(seq_a)
+            i_a = util.index(prealign_chain_a, a)
             for j,b in enumerate(chain_b):
+                if i_a>=0 and chain_b[i_a]!=b:
+                    # we only care about (a,b) if they are specified in prealign
+                    continue
                 seq_b=c_seq_b[b]
                 posX2pos_b=Protein.posX2pos(seq_b)
                 _, pos1, pos2 = Protein.find_aligned_positions(seq_a, seq_b, is_global=is_global, match=match, xmatch=xmatch, gap_open=gap_open, gap_ext=gap_ext)
@@ -3601,6 +3640,23 @@ class Protein:
         chain_map_b=[]
         rl_a=p.rl("NONE")
         rl_b=q.rl("NONE")
+
+        if len(prealign_chain_a)>0:
+            chain_map_a.extend(prealign_chain_a)
+            chain_map_b.extend(prealign_chain_b)
+            for a, b in zip(prealign_chain_a, prealign_chain_b):
+                i, j = chain_a.index(a), chain_b.index(b)
+                rl_a=rl_a+rs_pair[i,j][0]
+                rl_b=rl_b+rs_pair[i,j][1]
+                # Remove the pre-aligned row and column from sim and rs_pair
+                sim = np.delete(sim, i, axis=0)
+                sim = np.delete(sim, j, axis=1)
+                identity = np.delete(identity, i, axis=0)
+                identity = np.delete(identity, j, axis=1)
+                rs_pair = np.delete(rs_pair, i, axis=0)
+                rs_pair = np.delete(rs_pair, j, axis=1)
+                chain_a.pop(i)
+                chain_b.pop(j)
 
         while sim.shape[0]>0 and sim.shape[1]>0:
             max_score = np.max(sim)
@@ -3663,16 +3719,276 @@ class Protein:
             print(_[0])
         return (chain_map_a, chain_map_b, rl_a, rl_b)
 
+    def rl_align_multi(self, obj_b, is_global=False, match=2, xmatch=-1, gap_open=-1.5, gap_ext=-0.2, min_identity=0.3, prealign=None, top_candidates=-1):
+        """Automatically map chains between two objects. Ignore chain labels, but consider both sequence similarity
+        and structure similarity.
 
-    def align_two(self, obj_b, chain_a=None, chain_b=None, is_global=False, match=2, xmatch=-1, gap_open=-1.5, gap_ext=-0.2, auto_chain_map=False):
+        For the first aligned pair, we accept them without apply identity cutoff
+        Subsequent pairs must have identity above min_identity to be considered
+
+        prealign: the (self, obj_b) chain mapping to use as a starting point (hints provided by user)
+        top_candidates: number of top candidates to explore at each step
+            - 1: greedy mode (pick single best candidate)
+            - -1: explore all candidates (full permutation mode)  
+            - N > 1: explore top N candidates (limited permutation to prevent exponential explosion)
+
+        Return: (chain_map_a, chain_map_b, rl_a, rl_b)
+            chain_map_a: the list of chains from self
+            chain_map_b: the list of chains from obj_b
+            rl_a, rl_b: corresponding RL objects
+        """
+        p, q = self, obj_b
+        c_pos_a = p.chain_pos()
+        c_pos_b = q.chain_pos()
+        c_seq_a = p.seq_dict()
+        c_seq_b = q.seq_dict()
+        prealign_chain_a = []
+        prealign_chain_b = []
+        if prealign is not None:
+            for a, b in prealign.items():
+                if a in c_seq_a and b in c_seq_b:
+                    prealign_chain_a.append(a)
+                    prealign_chain_b.append(b)
+                else:
+                    print(f"WARNING> prealign chain {a} or {b} not found in the respective proteins, ignoring this pair.")
+        
+        chain_a = list(p.chain_id())
+        chain_b = list(q.chain_id())
+        n, m = len(c_seq_a), len(c_seq_b)
+        sim = np.zeros((n, m), dtype=float)
+        identity = np.zeros((n, m), dtype=float)
+        rs_pair = np.zeros((n, m), dtype=object)
+
+        # sequence align all chain pairs, memorize aligned residues in rs_pair
+        for i, a in enumerate(chain_a):
+            seq_a = c_seq_a[a]
+            posX2pos_a = Protein.posX2pos(seq_a)
+            i_a = util.index(prealign_chain_a, a)
+            for j, b in enumerate(chain_b):
+                if i_a >= 0 and prealign_chain_b[i_a] != b:
+                    # we only care about (a,b) if they are specified in prealign
+                    continue
+                seq_b = c_seq_b[b]
+                posX2pos_b = Protein.posX2pos(seq_b)
+                _, pos1, pos2 = Protein.find_aligned_positions(seq_a, seq_b, is_global=is_global, match=match, xmatch=xmatch, gap_open=gap_open, gap_ext=gap_ext)
+                sim[i, j] = _[0].score
+                identity[i, j] = _[1]
+                pos1 = [posX2pos_a[x] for x in pos1]
+                pos2 = [posX2pos_b[x] for x in pos2]
+                rs_pair[i, j] = (p.rl(np.array(pos1) + c_pos_a[a][0]), q.rl(np.array(pos2) + c_pos_b[b][0]))
+
+        # Use unified approach with top_candidates parameter
+        return self._rl_align_multi(p, q, chain_a, chain_b, sim, identity, rs_pair, 
+                                           prealign_chain_a, prealign_chain_b, c_seq_a, c_seq_b,
+                                           is_global, match, xmatch, gap_open, gap_ext, min_identity, top_candidates)
+
+    def _rl_align_multi(self, p, q, chain_a, chain_b, sim, identity, rs_pair, 
+                               prealign_chain_a, prealign_chain_b, c_seq_a, c_seq_b,
+                               is_global, match, xmatch, gap_open, gap_ext, min_identity, top_candidates):
+        """Unified queue-based implementation that handles all cases from greedy to full permutation"""
+        
+        # Handle prealigned chains first
+        initial_chain_map_a = []
+        initial_chain_map_b = []
+        initial_rl_a = p.rl("NONE")
+        initial_rl_b = q.rl("NONE")
+        
+        if len(prealign_chain_a) > 0:
+            initial_chain_map_a.extend(prealign_chain_a)
+            initial_chain_map_b.extend(prealign_chain_b)
+            for a, b in zip(prealign_chain_a, prealign_chain_b):
+                i, j = chain_a.index(a), chain_b.index(b)
+                initial_rl_a = initial_rl_a + rs_pair[i, j][0]
+                initial_rl_b = initial_rl_b + rs_pair[i, j][1]
+                # Remove the pre-aligned row and column
+                sim = np.delete(sim, i, axis=0)
+                sim = np.delete(sim, j, axis=1)
+                identity = np.delete(identity, i, axis=0)
+                identity = np.delete(identity, j, axis=1)
+                rs_pair = np.delete(rs_pair, i, axis=0)
+                rs_pair = np.delete(rs_pair, j, axis=1)
+                chain_a.pop(i)
+                chain_b.pop(j)
+
+        # Queue-based exploration: each item is (chain_a, chain_b, sim, identity, rs_pair, chain_map_a, chain_map_b, rl_a, rl_b)
+        from collections import deque
+        queue = deque()
+        all_paths = []
+        
+        # Initialize queue with starting state
+        queue.append((
+            chain_a.copy(), chain_b.copy(), sim.copy(), identity.copy(), rs_pair.copy(),
+            initial_chain_map_a, initial_chain_map_b, initial_rl_a, initial_rl_b
+        ))
+        
+        while queue:
+            current_chain_a, current_chain_b, current_sim, current_identity, current_rs_pair, \
+            current_chain_map_a, current_chain_map_b, current_rl_a, current_rl_b = queue.popleft()
+            
+            # Base case: no more chains to align
+            if current_sim.shape[0] == 0 or current_sim.shape[1] == 0:
+                all_paths.append((current_chain_map_a.copy(), current_chain_map_b.copy(), 
+                                current_rl_a, current_rl_b))
+                continue
+            
+            max_score = np.max(current_sim)
+            threshold = max_score * 0.9
+            
+            # Apply identity cutoff after first alignment
+            if len(current_rl_a) == 0:  # First pair
+                candidate_indices = np.argwhere(current_sim >= threshold)
+            else:
+                candidate_indices = np.argwhere((current_sim >= threshold) & (current_identity >= min_identity))
+            
+            # No valid candidates - add current path as complete
+            if len(candidate_indices) == 0:
+                all_paths.append((current_chain_map_a.copy(), current_chain_map_b.copy(),
+                                current_rl_a, current_rl_b))
+                continue
+            
+            # Handle candidate selection based on top_candidates
+            if top_candidates < 0 or len(candidate_indices) <= top_candidates:
+                # Full exploration or within limit - keep all candidates
+                pass
+            elif top_candidates == 1:
+                # Greedy mode: pick single best candidate using RMSD tie-breaking only if needed
+                if len(candidate_indices) > 1:
+                    best_pair = None
+                    best_struct_score = float('inf')
+                    for i, j in candidate_indices:
+                        rl_a_temp = current_rl_a + current_rs_pair[i, j][0]
+                        rl_b_temp = current_rl_b + current_rs_pair[i, j][1]
+                        try:
+                            struct_score = p.rmsd(q, rl_a_temp, rl_b_temp, ats="N,CA,C,O", align=True)
+                            if struct_score < best_struct_score:
+                                best_struct_score = struct_score
+                                best_pair = (i, j)
+                        except:
+                            continue
+                    if best_pair is None:
+                        best_pair = candidate_indices[0]
+                    candidate_indices = [best_pair]
+                # If only one candidate, no need for RMSD computation
+            else:
+                # Limited exploration: sort by score and take top N
+                scores = [current_sim[i, j] for i, j in candidate_indices]
+                sorted_indices = np.argsort(scores)[::-1]  # Sort in descending order
+                candidate_indices = candidate_indices[sorted_indices[:top_candidates]]
+            
+            # Add new states to queue for each selected candidate
+            for i, j in candidate_indices:
+                # Create new state for this candidate
+                new_chain_a = current_chain_a.copy()
+                new_chain_b = current_chain_b.copy()
+                new_sim = current_sim.copy()
+                new_identity = current_identity.copy()
+                new_rs_pair = current_rs_pair.copy()
+                
+                # Add current pair to the mapping
+                new_chain_map_a = current_chain_map_a + [new_chain_a[i]]
+                new_chain_map_b = current_chain_map_b + [new_chain_b[j]]
+                new_rl_a = current_rl_a + new_rs_pair[i, j][0]
+                new_rl_b = current_rl_b + new_rs_pair[i, j][1]
+                
+                # Remove the selected row and column
+                new_sim = np.delete(new_sim, i, axis=0)
+                new_sim = np.delete(new_sim, j, axis=1)
+                new_identity = np.delete(new_identity, i, axis=0)
+                new_identity = np.delete(new_identity, j, axis=1)
+                new_rs_pair = np.delete(new_rs_pair, i, axis=0)
+                new_rs_pair = np.delete(new_rs_pair, j, axis=1)
+                new_chain_a.pop(i)
+                new_chain_b.pop(j)
+                
+                # Add new state to queue
+                queue.append((
+                    new_chain_a, new_chain_b, new_sim, new_identity, new_rs_pair,
+                    new_chain_map_a, new_chain_map_b, new_rl_a, new_rl_b
+                ))
+        
+        if not all_paths:
+            return (initial_chain_map_a, initial_chain_map_b, initial_rl_a, initial_rl_b)
+        
+        # Find the path with the best final RMSD
+        best_path = None
+        best_rmsd = float('inf')
+        p_temp = p.clone()  # Clone q to avoid modifying original during RMSD calculations
+        seen_mappings = set()  # Track equivalent chain mappings to avoid duplicate RMSD calculations
+        for path in all_paths:
+            path_chain_map_a, path_chain_map_b, path_rl_a, path_rl_b = path
+            if len(path_rl_a) > 0 and len(path_rl_b) > 0:
+                # Generate canonical key for chain mapping to detect equivalent permutations
+                # Sort pairs (a,b) and then sort the list of pairs to create canonical order
+                mapping_pairs = list(zip(path_chain_map_a, path_chain_map_b))
+                canonical_mapping = tuple(sorted(mapping_pairs))
+                
+                # Skip if we've already evaluated this equivalent mapping
+                if canonical_mapping in seen_mappings:
+                    continue
+                seen_mappings.add(canonical_mapping)
+             
+                try:
+                    final_rmsd = p_temp.rmsd(q, path_rl_a, path_rl_b, ats="N,CA,C,O", align=True)
+                    if Protein.debug:
+                        print(f"Path: {path_chain_map_a} <> {path_chain_map_b}, RMSD: {final_rmsd:.3f} Å")
+                    if final_rmsd < best_rmsd:
+                        best_rmsd = final_rmsd
+                        best_path = path
+                except:
+                    continue
+        
+        if best_path is None:
+            best_path = all_paths[0]  # Fallback to first valid path
+        
+        chain_map_a, chain_map_b, rl_a, rl_b = best_path
+        
+        # Print alignment summary
+        if top_candidates == 1:
+            print(f"Greedy alignment completed")
+        else:
+            print(f"Explored {len(all_paths)} alignment paths")
+        if best_rmsd != float('inf'):
+            print(f"Best path RMSD: {best_rmsd:.3f} Å")
+        for ka, kb in zip(chain_map_a, chain_map_b):
+            if ka in c_seq_a and kb in c_seq_b:
+                _, pos1, pos2 = Protein.find_aligned_positions(c_seq_a[ka], c_seq_b[kb], is_global=is_global, match=match, xmatch=xmatch, gap_open=gap_open, gap_ext=gap_ext)
+                print(f"Chain Mapped: {ka} <> {kb}")
+                print(_[0])
+        
+        return best_path
+    
+    def align_two(self, obj_b, chain_a=None, chain_b=None, is_global=False, match=2, xmatch=-1, gap_open=-1.5, gap_ext=-0.2, auto_chain_map=False, top_candidates=-1):
         """
         self is the reference protein, chains in obj_b will be renamed to match chains in self
         return two new objects: (new_reference, new_obj_b, RL_old_ref, RL_old_b), where only aligned residues are kept
         new pairs can be directly used for rmsd and dockQ calculation
+
+        When auto_chain_map is True, chain_a and chain_b will not be ignored if provided! So that we can 
+        provide some hints to help with the alignment, when there are multiple copies of similar chains.
+        For example, for a homodimer, we can specify chain_a=["A"] and chain_b=["H"], 
+        so that the algorithm will first align A and H, then use the alignment between A and H to help
+        identify the right pair of chains for the second copy of the homodimer.
+        
+        top_candidates: number of top candidates to explore at each alignment step (only used when auto_chain_map=True):
+            - 1: greedy mode (pick single best candidate, equivalent to old method)
+            - -1: full permutation mode (explore all candidates, default)
+            - N > 1: explore top N candidates (limited permutation to prevent exponential explosion)
         """
         if auto_chain_map:
+            prealign=None
+            if chain_a is not None or chain_b is not None:
+                if chain_a is None:
+                    if type(chain_b) is str: chain_b=[chain_b]               
+                    chain_a=chain_b=[x for x in self.chain_id() if x in chain_b ]
+                elif chain_b is None:
+                    if type(chain_a) is str: chain_a=[chain_a]
+                    chain_b=chain_a=[x for x in obj_b.chain_id() if x in chain_a ]
+                else:
+                    if type(chain_a) is str: chain_a=[chain_a]
+                    if type(chain_b) is str: chain_b=[chain_b]
+                prealign={x:y for x,y in zip(chain_a, chain_b)}
             chain_a, chain_b, rl_a, rl_b = self.rl_align_multi(obj_b, is_global=is_global, match=match, xmatch=xmatch, \
-                                    gap_open=gap_open, gap_ext=gap_ext)
+                                    gap_open=gap_open, gap_ext=gap_ext, prealign=prealign, top_candidates=top_candidates)
         else:
             if chain_a is None:
                 chain_a=chain_b=[x for x in self.chain_id() if x in obj_b.chain_id() ]
@@ -3681,6 +3997,93 @@ class Protein:
         p_b=obj_b.extract(rl_b)
         p_b.rename_chains({k:v for k,v in zip(chain_b, chain_a)}, inplace=True)
         return (p_a, p_b, rl_a, rl_b)
+    
+    def _to_be_delete_align_two(self, obj_b, chain_a=None, chain_b=None, is_global=False, match=2, xmatch=-1, gap_open=-1.5, gap_ext=-0.2, auto_chain_map=False):
+        """
+        self is the reference protein, chains in obj_b will be renamed to match chains in self
+        return two new objects: (new_reference, new_obj_b, RL_old_ref, RL_old_b), where only aligned residues are kept
+        new pairs can be directly used for rmsd and dockQ calculation
+
+        When auto_chain_map is True, chain_a and chain_b will not be ignored if provided! So that we can 
+        provide some hints to help with the alignment, when there are multiple copies of similar chains.
+        For example, for a homodimer, we can specify chain_a=["A"] and chain_b=["H"], 
+        so that the algorithm will first align A and H, then use the alignment between A and H to help
+        identify the right pair of chains for the second copy of the homodimer.
+        """
+        if auto_chain_map:
+            prealign=None
+            if chain_a is not None or chain_b is not None:
+                if chain_a is None:
+                    if type(chain_b) is str: chain_b=[chain_b]               
+                    chain_a=chain_b=[x for x in self.chain_id() if x in chain_b ]
+                elif chain_b is None:
+                    if type(chain_a) is str: chain_a=[chain_a]
+                    chain_b=chain_a=[x for x in obj_b.chain_id() if x in chain_a ]
+                else:
+                    if type(chain_a) is str: chain_a=[chain_a]
+                    if type(chain_b) is str: chain_b=[chain_b]
+                prealign={x:y for x,y in zip(chain_a, chain_b)}
+            chain_a, chain_b, rl_a, rl_b = self.rl_align_multi(obj_b, is_global=is_global, match=match, xmatch=xmatch, \
+                                    gap_open=gap_open, gap_ext=gap_ext, prealign=prealign)
+        else:
+            if chain_a is None:
+                chain_a=chain_b=[x for x in self.chain_id() if x in obj_b.chain_id() ]
+            rl_a, rl_b = self.rl_align(obj_b, chain_a, chain_b, is_global, match, xmatch, gap_open, gap_ext)
+        p_a=self.extract(rl_a)
+        p_b=obj_b.extract(rl_b)
+        p_b.rename_chains({k:v for k,v in zip(chain_b, chain_a)}, inplace=True)
+        return (p_a, p_b, rl_a, rl_b)
+
+    def align_permute(self, obj_b, chain_a=None, chain_b=None, is_global=False, match=2, xmatch=-1, gap_open=-1.5, gap_ext=-0.2, similarity_cutoff=0.9):
+        """Try all possible chain mapping between two objects, return the best aligned pair with highest identity
+        and the corresponding aligned objects and RLs.
+        
+        Only sequences above the similarity_cutoff will be considered as potentially equivalent and go into the permutation generation.
+        This is useful when the two structures have multiple chains with identical sequences, and we are not sure about the chain mapping.
+        
+        align_two() uses a greedy algorithm in auto_chain_map=True, but align_permute more or less use brute force.
+        So align_permute is more computational expensive, but can be more accurate when there are multiple similar chains.
+        
+        chain_a and chain_b can be used as hints to reduce the search space. They will not be part of the permutation.
+        """
+        if chain_a is not None or chain_b is not None:
+            if chain_a is None:
+                if type(chain_b) is str: chain_b=[chain_b]               
+                chain_a=chain_b=[x for x in self.chain_id() if x in chain_b ]
+            elif chain_b is None:
+                if type(chain_a) is str: chain_a=[chain_a]
+                chain_b=chain_a=[x for x in obj_b.chain_id() if x in chain_a ]
+            else:
+                if type(chain_a) is str: chain_a=[chain_a]
+                if type(chain_b) is str: chain_b=[chain_b]
+
+
+        best_identity=-1
+        best_mapping=None
+        best_rl_a=None
+        best_rl_b=None
+        for perm in itertools.permutations(chain_b, len(chain_a)):
+            _, _, rl_a, rl_b = self.rl_align(obj_b, chain_a, perm, is_global=is_global, match=match, xmatch=xmatch, gap_open=gap_open, gap_ext=gap_ext)
+            if len(rl_a)==0:
+                continue
+            p_a=self.extract(rl_a)
+            p_b=obj_b.extract(rl_b)
+            p_b.rename_chains({k:v for k,v in zip(perm, chain_a)}, inplace=True)
+            _, identity = Protein.find_aligned_positions(p_a.seq(), p_b.seq(), is_global=True, match=match, xmatch=xmatch, gap_open=gap_open, gap_ext=gap_ext)[0]
+            if identity>best_identity:
+                best_identity=identity
+                best_mapping=(perm, identity)
+                best_rl_a=rl_a
+                best_rl_b=rl_b
+        if best_mapping is None:
+            print("WARNING> No aligned residues found between the specified chains of the two objects.")
+            return (None, None, None, None)
+        else:
+            print(f"Best Chain Mapping: {best_mapping[0]} with Identity: {best_mapping[1]:.2f}%")
+            p_a=self.extract(best_rl_a)
+            p_b=obj_b.extract(best_rl_b)
+            p_b.rename_chains({k:v for k,v in zip(best_mapping[0], chain_a)}, inplace=True)
+            return (p_a, p_b, best_rl_a, best_rl_b)
 
     @staticmethod
     def posX2pos(seq: str) -> np.ndarray:
@@ -3699,7 +4102,7 @@ class Protein:
         If you are looking for a specific chain_type, you can specify "H", ["H", "L"], etc.
                 The default None means ["H", "L", "K"]. "L" will include "K" as well.
 
-        return (chain_type, (var_start, var_end), ((b1,e1,s1), (b2,e2,s2), (b3,e3,s3)))
+        return (chain_type, (var_start, var_end), ((b1,e1,s1), (b2,e2,s2), (b3,e3,s3)), numbering)
         """
         check_Ab()
         if chain_type is None:
@@ -4398,6 +4801,13 @@ class RL:
 
         return ":".join(out)
 
+    def __and__(self, rs_b: 'RS') -> 'RS':
+        """AND operation for two residue list, we aim to preserve the order in a, remove elements that appear in b.
+        Noted this is not symmetrical, [a, a, b, c] & [a, b, b] will give [a, a, b], where b only occurs once
+        """
+        common=set(self.data) & set(RS(self.p, rs_b.data).data)
+        return RL(self.p, [x for x in self.data if x in common])
+    
     def __or__(self, rl_b: 'RL') -> 'RL':
         """or/add for two residue lists means we concatenate them"""
         return RL(self.p, np.concatenate((self.data, rl_b.data)))
@@ -4411,6 +4821,20 @@ class RL:
         out=[x for x in self.data if x not in rs_b.data]
         return RL(self.p, out)
 
+    @staticmethod
+    def _and(*L_rs: 'RS') -> 'RS':
+        """and operation on a list of RL objects. The first object is special in the sense that replicates within are preseved."""
+        if len(L_rs)==0: util.error_msg("At least one RL objective should be provided!")
+        if not isinstance(L_rs[0], RL): util.error_msg("The first objective must be an RL instance!")
+        p=L_rs[0].p
+        sets=[set(RL(p, x).data) for x in L_rs]
+        common=sets[0]
+        for x in sets[1:]:
+            common &= x
+            if len(common)==0: break
+        out=[x for x in self.data if x in common]
+        return RS(p, out)
+    
     @staticmethod
     def _or(*L_rl: 'RL') -> 'RL':
         """or operation on a list of RL objects"""
@@ -4662,6 +5086,272 @@ class RS(RL):
                 #print(out2, one)
             out.append("/".join(out2))
         return " ".join(out)
+
+class InteractionAnalyzer:
+    """Analyze molecular interactions between protein regions using PyMOL.
+
+    # Example usage
+    p = Protein("5cil")
+    print(p.seq())
+    rs_a = "H:L"
+    rs_b = "P"
+
+    # Using context manager for automatic cleanup
+    with InteractionAnalyzer(p) as analyzer:
+        # Get all interactions
+        all_bonds = analyzer.all_interactions(rs_a, rs_b)
+        print("\nAll interactions:")
+        print(all_bonds)
+
+        # Get specific interaction types
+        print("\nHydrogen bonds only:")
+        hbonds = analyzer.hydrogen_bonds(rs_a, rs_b)
+        print(hbonds)
+
+        print("\nSalt bridges at pH 7.0:")
+        salt_bonds_neutral = analyzer.salt_bridges(rs_a, rs_b, pH=7.0)
+        print(salt_bonds_neutral)
+
+        print("\nSalt bridges at pH 5.0 (acidic):")
+        salt_bonds_acidic = analyzer.salt_bridges(rs_a, rs_b, pH=5.0)
+        print(salt_bonds_acidic)
+
+        print("\nSalt bridges at pH 9.0 (basic):")
+        salt_bonds_basic = analyzer.salt_bridges(rs_a, rs_b, pH=9.0)
+        print(salt_bonds_basic)
+
+    An analyzer object can also be created by
+        p.interaction_analyzer()
+    """
+
+    def __init__(self, input_obj, add_hydrogens=True):
+        """
+        Initialize analyzer with protein structure.
+
+        Args:
+            input_obj: Either Protein object or PyMOL object
+            add_hydrogens: Whether to add hydrogens (for H-bond analysis)
+        """
+        self.protein = None
+        self.pm = None
+        self.owns_pymol = False
+        self._temp_file = None
+
+        if isinstance(input_obj, Protein):
+            self.protein = input_obj
+            self._setup_pymol_from_protein(add_hydrogens)
+        else:
+            self.pm = input_obj
+            self.owns_pymol = False
+
+    def _setup_pymol_from_protein(self, add_hydrogens=True):
+        """Setup PyMOL object from Protein."""
+        temp_fd, self._temp_file = tempfile.mkstemp(suffix='.pdb')
+        os.close(temp_fd)
+
+        self.protein.save(self._temp_file)
+        self.pm = self.protein.PyMOL()
+        self.pm.p.cmd.load(self._temp_file, 'structure')
+
+        if add_hydrogens:
+            self.pm.p.cmd.h_add()
+
+        self.owns_pymol = True
+
+        if self._temp_file and os.path.exists(self._temp_file):
+            os.remove(self._temp_file)
+
+    def _cleanup_selections(self):
+        """Clean up all PyMOL selections."""
+        try:
+            self.pm.p.cmd.deselect()  # Clear current selection
+            # Delete all named selections (but preserve objects like structures)
+            self.pm.p.cmd.delete("selection")  # Delete all selection objects
+        except:
+            pass  # Ignore if no selections exist
+
+    def _build_selections(self, rs_a, rs_b):
+        """Build PyMOL selection strings from region specifications."""
+        if self.protein:
+            # Clean up any existing selections first
+            self._cleanup_selections()
+
+            rs_a_sel = RS(self.protein, rs_a).__str__(format="PYMOL", rs_name="rs_a", obj_name="structure")
+            rs_b_sel = RS(self.protein, rs_b).__str__(format="PYMOL", rs_name="rs_b", obj_name="structure")
+            self.pm.p.cmd.do(rs_a_sel)
+            self.pm.p.cmd.do(rs_b_sel)
+            return "rs_a", "rs_b"
+        else:
+            return rs_a, rs_b
+
+    def _extract_atom_pairs(self, sel_a, sel_b, cutoff, use_find_pairs=False, angle=None):
+        """Extract atom pairs and their information from PyMOL selections."""
+        if use_find_pairs and angle is not None:
+            pairs = self.pm.p.cmd.find_pairs(sel_a, sel_b, cutoff=cutoff, mode=1, angle=angle)
+        else:
+            pairs = self.pm.p.cmd.find_pairs(sel_a, sel_b, cutoff=cutoff, mode=0)
+
+        if not pairs:
+            return pd.DataFrame(columns=['chain_a', 'resn_a', 'resi_a', 'atom_a', 'chain_b', 'resn_b', 'resi_b', 'atom_b', 'distance'])
+
+        # Collect all unique atom indices
+        all_indices = set()
+        for a1, a2 in pairs:
+            all_indices.add(a1[1])
+            all_indices.add(a2[1])
+
+        # Get all atom info in one call
+        atom_info = {}
+        if all_indices:
+            indices_str = "+".join(map(str, all_indices))
+            info_list = []
+            self.pm.p.cmd.iterate(f"index {indices_str}", "info_list.append((index, chain, resn, resi, name))", space={'info_list': info_list})
+            atom_info = {idx: (chain, resn, resi, name) for idx, chain, resn, resi, name in info_list}
+
+        # Process pairs using cached atom info
+        results = []
+        for a1, a2 in pairs:
+            chain1, resn1, resi1, name1 = atom_info[a1[1]]
+            chain2, resn2, resi2, name2 = atom_info[a2[1]]
+
+            aa1 = afres.restype_3to1.get(resn1, resn1)
+            aa2 = afres.restype_3to1.get(resn2, resn2)
+
+            dist = self.pm.p.cmd.get_distance(f"index {a1[1]}", f"index {a2[1]}")
+            # we need to remove duplicates like (a,b) and (b,a)
+            key = f"{a1[1]} {a2[1]}" if a1[1] < a2[1] else f"{a2[1]} {a1[1]}"
+            results.append((key, chain1, aa1, resi1, name1, chain2, aa2, resi2, name2, dist))
+
+        out = pd.DataFrame(results, columns=['_key', 'chain_a', 'resn_a', 'resi_a', 'atom_a', 'chain_b', 'resn_b', 'resi_b', 'atom_b', 'distance'])
+        out = out.sort_values(['_key', 'atom_a', 'atom_b']).drop_duplicates('_key').drop('_key', axis=1).reset_index(drop=True)
+        return out
+
+    def hydrogen_bonds(self, rs_a:ContigType=None, rs_b:ContigType=None, cutoff=3.6, angle=55.0):
+        """Find hydrogen bonds between two regions."""
+        sel_a_base, sel_b_base = self._build_selections(rs_a, rs_b)
+
+        sel_a = f"({sel_a_base} and donors) or ({sel_a_base} and acceptors)"
+        sel_b = f"({sel_b_base} and donors) or ({sel_b_base} and acceptors)"
+
+        df = self._extract_atom_pairs(sel_a, sel_b, cutoff, use_find_pairs=True, angle=angle)
+        df['interaction_type'] = 'hydrogen_bond'
+        return df
+
+    def salt_bridges(self, rs_a:ContigType=None, rs_b:ContigType=None, cutoff=4.0, pH=7.0):
+        """
+        Find salt bridges between two regions.
+
+        Args:
+            rs_a, rs_b: Region selections
+            cutoff: Distance cutoff for salt bridges
+            ph: pH value for histidine protonation state
+                - pH < 6.0: HIS is positively charged (both ND1 and NE2)
+                - 6.0 <= pH <= 8.0: HIS is neutral (one N protonated)
+                - pH > 8.0: HIS is neutral/negative (no charge)
+        """
+        sel_a_base, sel_b_base = self._build_selections(rs_a, rs_b)
+
+        # Build histidine selections based on pH
+        # HIS pKa ≈ 6.0, so it's positively charged only at pH < 6.0
+        if pH < 6.0:
+            # Acidic pH: HIS is positively charged (protonated)
+            his_pos_a = f"({sel_a_base} and resn HIS and name ND1+NE2)"
+            his_pos_b = f"({sel_b_base} and resn HIS and name ND1+NE2)"
+        else:
+            # pH >= 6.0: HIS is neutral, no positive charge for salt bridges
+            his_pos_a = ""
+            his_pos_b = ""
+
+        # Build positive charge selections
+        if his_pos_a:
+            sel_pos_a = f"({sel_a_base} and (resn ARG+LYS) and name NH1+NH2+NZ) or {his_pos_a}"
+        else:
+            sel_pos_a = f"{sel_a_base} and (resn ARG+LYS) and name NH1+NH2+NZ"
+
+        if his_pos_b:
+            sel_pos_b = f"({sel_b_base} and (resn ARG+LYS) and name NH1+NH2+NZ) or {his_pos_b}"
+        else:
+            sel_pos_b = f"{sel_b_base} and (resn ARG+LYS) and name NH1+NH2+NZ"
+
+        # Negative charges (ASP/GLU are always negative in typical pH range)
+        sel_neg_a = f"{sel_a_base} and (resn ASP+GLU) and name OD1+OD2+OE1+OE2"
+        sel_neg_b = f"{sel_b_base} and (resn ASP+GLU) and name OD1+OD2+OE1+OE2"
+
+        # Get both directions of salt bridges
+        df_ab = self._extract_atom_pairs(sel_pos_a, sel_neg_b, cutoff)
+        df_ba = self._extract_atom_pairs(sel_pos_b, sel_neg_a, cutoff)
+
+        df = pd.concat([df_ab, df_ba], ignore_index=True)
+        df['interaction_type'] = 'salt_bridge'
+        df['pH'] = pH  # Add pH information to results
+        return df
+
+    def disulfide_bonds(self, rs_a:ContigType=None, rs_b:ContigType=None, cutoff=2.25):
+        """Find disulfide bonds between two regions."""
+        sel_a_base, sel_b_base = self._build_selections(rs_a, rs_b)
+
+        sel_a = f"{sel_a_base} and resn CYS and name SG"
+        sel_b = f"{sel_b_base} and resn CYS and name SG"
+
+        df = self._extract_atom_pairs(sel_a, sel_b, cutoff)
+        df['interaction_type'] = 'disulfide_bond'
+        return df
+
+    def hydrophobic_contacts(self, rs_a:ContigType=None, rs_b:ContigType=None, cutoff=4.0):
+        """Find hydrophobic contacts between two regions."""
+        sel_a_base, sel_b_base = self._build_selections(rs_a, rs_b)
+
+        sel_a = f"{sel_a_base} and resn ALA+VAL+LEU+ILE+MET+PHE+TRP+TYR+PRO and not name N+CA+C+O and not elem H"
+        sel_b = f"{sel_b_base} and resn ALA+VAL+LEU+ILE+MET+PHE+TRP+TYR+PRO and not name N+CA+C+O and not elem H"
+
+        df = self._extract_atom_pairs(sel_a, sel_b, cutoff)
+        df['interaction_type'] = 'hydrophobic_contact'
+        return df
+
+    def all_interactions(self, rs_a:ContigType=None, rs_b:ContigType=None, hb_cutoff=3.6, hb_angle=55.0,
+                        salt_cutoff=4.0, salt_pH=7.0, disulf_cutoff=2.25, hydro_cutoff=4.0):
+        """Find all types of interactions between two regions."""
+        results = []
+
+        # Get each type of interaction
+        hb_df = self.hydrogen_bonds(rs_a, rs_b, hb_cutoff, hb_angle)
+        if not hb_df.empty:
+            results.append(hb_df)
+
+        salt_df = self.salt_bridges(rs_a, rs_b, salt_cutoff, salt_pH)
+        if not salt_df.empty:
+            results.append(salt_df)
+
+        disulf_df = self.disulfide_bonds(rs_a, rs_b, disulf_cutoff)
+        if not disulf_df.empty:
+            results.append(disulf_df)
+
+        hydro_df = self.hydrophobic_contacts(rs_a, rs_b, hydro_cutoff)
+        if not hydro_df.empty:
+            results.append(hydro_df)
+
+        if results:
+            return pd.concat(results, ignore_index=True)
+        else:
+            # Return empty DataFrame with all columns
+            return pd.DataFrame(columns=['chain_a', 'resn_a', 'resi_a', 'atom_a', 'chain_b', 'resn_b', 'resi_b', 'atom_b', 'distance', 'interaction_type'])
+
+    def close(self):
+        """Clean up resources."""
+        if self.pm:
+            # Clean up any remaining selections
+            self._cleanup_selections()
+
+        if self.owns_pymol and self.pm:
+            self.pm.close()
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit."""
+        self.close()
 
 if __name__=="__main__":
     pass

@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='afpdb',
-    version='0.3.0',
+    version='0.3.5',
     description='A Numpy-based PDB structure manipulation package',
     url='https://github.com/data2code/afpdb',
     author='Yingyao Zhou',
